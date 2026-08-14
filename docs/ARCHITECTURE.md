@@ -67,7 +67,7 @@ End-to-end overlay partial ≈ hop + decode (not a 30 s Whisper chunk).
 | Window hop | 200–300 | Dominates “near-zero” |
 | Turbo FP16 decode | 50–120 | ~1 s audio on 4070 Ti SUPER |
 | Overlay update | hop cadence | Target **< 400 ms** partials |
-| Ollama `qwen2.5-coder:1.5b` | 20–80 | After commit only |
+| Ollama `qwen2.5:1.5b` | 20–80 | After commit only |
 | Clipboard commit | — | Target **< 1 s** after sentence end |
 
 If hop + decode exceeds 400 ms, shrink hop before shrinking the model. If another GPU app is heavy, keep Whisper loaded and consider CPU offload for Ollama rather than unloading ASR.
@@ -77,7 +77,7 @@ If hop + decode exceeds 400 ms, shrink hop before shrinking the model. If anothe
 | Resident | Approx. VRAM | Role |
 |---|---|---|
 | faster-whisper `large-v3-turbo` FP16 | ~3 GB | Resident ASR while Mic is ON (idled during VAD quiet) |
-| `qwen2.5-coder:1.5b` (Ollama) | ~1 GB | Sentence correction |
+| `qwen2.5:1.5b` (Ollama) | ~1 GB | Sentence correction |
 | Other GPU apps + OS | remainder | Must still fit |
 | Headroom | ~7+ GB | Keep the 1.5B default while the card is shared |
 

@@ -47,11 +47,11 @@ First run downloads the CTranslate2 model into the Hugging Face cache. Expect ~3
 Ollama here is the **desktop app’s** sentence corrector, not the Cursor coding agent.
 
 ```powershell
-ollama pull qwen2.5-coder:1.5b
-ollama run qwen2.5-coder:1.5b "Reply with the single word: pong"
+ollama pull qwen2.5:1.5b
+ollama run qwen2.5:1.5b "Reply with the single word: pong"
 ```
 
-Keep the default at `qwen2.5-coder:1.5b` (~1 GB) so other GPU work can share the 16 GB card. Do not bind Ollama to `0.0.0.0`.
+Keep the default at `qwen2.5:1.5b` (~1 GB) so other GPU work can share the 16 GB card. Do not bind Ollama to `0.0.0.0`.
 
 ## 5. Run
 
@@ -70,7 +70,7 @@ A desktop shortcut is a local Windows `.lnk` only. Do not add it to the repo. Af
 - [ ] `nvidia-smi` sees the GPU
 - [ ] `.venv` has `faster-whisper` and `PyQt6`
 - [ ] WhisperModel loads on `cuda` / `float16`
-- [ ] `ollama run qwen2.5-coder:1.5b` works on `127.0.0.1`
+- [ ] `ollama run qwen2.5:1.5b` works on `127.0.0.1`
 - [ ] Overlay appears; tray icon has Show / Stop / Restart / About
 - [ ] Desktop shortcut launches `PersonalClipboard.exe` when `dist\` exists
 - [ ] No cloud API keys in the repo

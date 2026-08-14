@@ -50,7 +50,7 @@ Single local user on this PC.
 ### 4.3 Correction and clipboard
 
 - FR-L1: Ollama Python client talks only to `http://127.0.0.1:*`.
-- FR-L2: Default correction model: `qwen2.5-coder:1.5b` (VRAM headroom for other GPU apps).
+- FR-L2: Default correction model: `qwen2.5:1.5b` (VRAM headroom for other GPU apps).
 - FR-L3: Skip or timeout an in-flight correction if a newer committed sentence is ready.
 - FR-L4: Committed + corrected text is written with `QClipboard` (Qt).
 - FR-L5: `Ctrl+Shift+A` is a **global** hotkey (`pynput`); Qt shortcuts are insufficient.
@@ -94,12 +94,12 @@ Single local user on this PC.
 | Window hop | 200–300 ms |
 | Turbo FP16 decode (~1 s chunk) | 50–120 ms on 4070 Ti SUPER |
 | Overlay partials | hop cadence; **target < 400 ms** end-to-end |
-| Ollama correction (`qwen2.5-coder:1.5b`) | 20–80 ms **after commit** |
+| Ollama correction (`qwen2.5:1.5b`) | 20–80 ms **after commit** |
 | Clipboard commit | **target < 1 s** after end of sentence |
 
 ### 5.3 Resources
 
-- Whisper turbo FP16 resident ~3 GB. Correction LLM (`qwen2.5-coder:1.5b`) ~1 GB. Leave headroom on 16 GB for other GPU apps.
+- Whisper turbo FP16 resident ~3 GB. Correction LLM (`qwen2.5:1.5b`) ~1 GB. Leave headroom on 16 GB for other GPU apps.
 - Audio callback must not allocate GPU, take Python locks, or touch Qt.
 
 ## 6. Technical stack (Windows)

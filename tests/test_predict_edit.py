@@ -30,3 +30,20 @@ def test_no_ghost_when_unfocused(qapp) -> None:
     edit.set_ghost("The meeting is", " tomorrow")
     assert edit.ghost() == ""
     edit.deleteLater()
+
+
+def test_clear_button_empties_text_and_ghost(qapp, monkeypatch) -> None:
+    assert qapp is not None
+    edit = PredictLineEdit()
+    monkeypatch.setattr(edit, "hasFocus", lambda: True)
+    edit.set_blocked(True)
+    edit.setText("The meeting is")
+    edit.set_blocked(False)
+    edit.set_ghost("The meeting is", " scheduled")
+    assert not edit._clear.isHidden()
+    edit._clear.click()
+    qapp.processEvents()
+    assert edit.text() == ""
+    assert edit.ghost() == ""
+    assert edit._clear.isHidden()
+    edit.deleteLater()

@@ -14,14 +14,24 @@ from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from personalclipboard.asr.engine import AsrEngine
 from personalclipboard.audio.capture import AudioCapture
 from personalclipboard.audio.probe import WakeProbe
+from personalclipboard.clipboard.history import ClipboardHistory
 from personalclipboard.clipboard.service import ClipboardService
-from personalclipboard.config import Settings, load_settings, save_settings
+from personalclipboard.config import (
+    OPACITY_MAX,
+    OPACITY_MIN,
+    Settings,
+    history_path,
+    load_settings,
+    save_settings,
+)
 from personalclipboard.hotkeys.bindings import GlobalHotkeys
 from personalclipboard.llm.corrector import Corrector
+from personalclipboard.llm.variants import PhraseBank
 from personalclipboard.llm.worker import LlmWorker
 from personalclipboard.notes.meeting import MeetingNotes, desktop_directory
 from personalclipboard.ui.bridge import UiBridge
 from personalclipboard.ui.copy_cue import play_copy_cue
+from personalclipboard.ui.history_dialog import HistoryDialog
 from personalclipboard.ui.overlay import Overlay
 from personalclipboard.ui.tray import make_tray_icon, show_about, spawn_new_instance
 from personalclipboard.windows.input import WindowInput
@@ -41,6 +51,7 @@ class PersonalClipboardApp(QObject):
         settings: Settings,
         *,
         start_background: bool = True,
+        history: ClipboardHistory | None = None,
     ) -> None:
         super().__init__(qt)
         self._booting = True
@@ -67,7 +78,8 @@ class PersonalClipboardApp(QObject):
         clipboard = qt.clipboard()
         if clipboard is None:
             raise RuntimeError("Qt clipboard is unavailable")
-        self._clipboard = ClipboardService(clipboard)
+        self._history = history or ClipboardHistory(history_path())
+        self._clipboard = ClipboardService(clipboard, self._history)
         self._hotkeys = GlobalHotkeys(
             settings,
             self._bridge.reformat_requested.emit,
@@ -77,6 +89,7 @@ class PersonalClipboardApp(QObject):
         self._last_ready = ""
         self._commit_source = "audio"
         self._typed_original = ""
+        self._phrases = PhraseBank()
         self._stopped = False
         self._meeting: MeetingNotes | None = None
         self._meeting_owned_capture = False
@@ -135,9 +148,11 @@ class PersonalClipboardApp(QObject):
         self._overlay.enable_toggled.connect(self._set_capture)
         self._overlay.hide_requested.connect(self._overlay.hide)
         self._overlay.copy_requested.connect(self._copy_ready)
+        self._overlay.history_requested.connect(self._open_history)
         self._overlay.phrase_completed.connect(self._on_typed_commit)
         self._overlay.prediction_requested.connect(self._on_prediction_requested)
         self._overlay.meeting_toggled.connect(self._on_meeting_toggled)
+        self._overlay.retry_requested.connect(self._on_retry_requested)
         panel = self._overlay.settings
         panel.language_changed.connect(self._on_language_changed)
         panel.opacity_changed.connect(self._on_opacity_changed)
@@ -295,24 +310,56 @@ class PersonalClipboardApp(QObject):
         if not any(char.isalnum() for char in text):
             return
         self._commit_source = source
+        self._phrases.reset(text)
         if source == "typed":
             self._typed_original = text
-            self._overlay.show_typed_phrase(text)
+            self._overlay.show_typed_phrase(text, state="correcting")
         else:
-            self._overlay.show_audio_phrase(text)
+            self._overlay.show_audio_phrase(text, state="correcting")
         self._overlay.set_message("Correcting…")
         self._llm.submit(text)
 
     def _on_corrected(self, text: str) -> None:
         if self._stopped or not text.strip():
             return
-        self._last_ready = text
-        self._clipboard.write(text)
+        shown = self._phrases.record(text)
+        self._publish_phrase(shown, log=True)
+
+    def _on_retry_requested(self) -> None:
+        if self._stopped or self._meeting is not None:
+            return
+        if self._phrases.retrying:
+            return
+        nxt = self._phrases.step()
+        if nxt is not None:
+            self._publish_phrase(nxt, log=False)
+            return
+        original, temperature, seed = self._phrases.begin_retry()
+        if not original:
+            self._phrases.retrying = False
+            return
+        current = self._phrases.current()
         if self._commit_source == "typed":
-            self._overlay.show_typed_phrase(text)
-            self._overlay.apply_typed_correction(self._typed_original, text)
+            self._overlay.show_typed_phrase(current, state="correcting")
         else:
-            self._overlay.show_audio_phrase(text)
+            self._overlay.show_audio_phrase(current, state="correcting")
+        self._overlay.set_message("Correcting…")
+        self._llm.submit(original, temperature=temperature, seed=seed, vary=True)
+
+    def _publish_phrase(self, text: str, *, log: bool) -> None:
+        stripped = text.strip()
+        if not stripped:
+            return
+        previous = self._last_ready
+        self._last_ready = stripped
+        self._clipboard.write(stripped, log=log)
+        if self._commit_source == "typed":
+            self._overlay.show_typed_phrase(stripped)
+            self._overlay.apply_typed_correction(
+                self._typed_original, stripped, previous=previous
+            )
+        else:
+            self._overlay.show_audio_phrase(stripped)
         self._overlay.set_message("On clipboard. Press Ctrl+V to paste.")
 
     def _on_reformat(self) -> None:
@@ -320,9 +367,11 @@ class PersonalClipboardApp(QObject):
         if not current.strip():
             self._overlay.set_message("Clipboard is empty")
             return
+        self._phrases.reset(current)
         self._overlay.set_message("Correcting clipboard…")
         self._commit_source = "typed"
         self._typed_original = current
+        self._overlay.show_typed_phrase(current, state="correcting")
         self._llm.submit(current)
 
     def _on_command(self, command: str) -> None:
@@ -370,6 +419,9 @@ class PersonalClipboardApp(QObject):
             return
         self._last_ready = text
         self._commit_source = "typed"
+        self._typed_original = text
+        self._phrases.reset(text)
+        self._history.append(text)
         self._overlay.show_typed_phrase(text)
         self._overlay.set_typed(text)
         self._overlay.set_message("Copied selection from the other window.")
@@ -485,10 +537,25 @@ class PersonalClipboardApp(QObject):
         self._settings.ui_language = lang
         save_settings(self._settings)
 
+    def _open_history(self) -> None:
+        dialog = HistoryDialog(
+            self._history.entries(),
+            self._settings.ui_language,
+            self._overlay,
+        )
+        dialog.copy_requested.connect(self._copy_history_entry)
+        dialog.exec()
+
+    def _copy_history_entry(self, text: str) -> None:
+        if not text.strip():
+            return
+        self._clipboard.write(text, log=False)
+        self._last_ready = text
+
     def _on_opacity_changed(self, percent: int) -> None:
         if self._booting:
             return
-        self._settings.overlay_opacity = percent
+        self._settings.overlay_opacity = max(OPACITY_MIN, min(OPACITY_MAX, percent))
         save_settings(self._settings)
 
     def _on_whisper_changed(self, name: str) -> None:
@@ -508,6 +575,9 @@ class PersonalClipboardApp(QObject):
             return
         self._settings.ollama_model = name
         save_settings(self._settings)
+        threading.Thread(
+            target=self._corrector.ensure_loaded, name="ollama-load", daemon=True
+        ).start()
 
     def _on_vad_changed(self, enabled: bool) -> None:
         if self._booting:
@@ -537,6 +607,7 @@ class PersonalClipboardApp(QObject):
 
     def _load_ollama_models(self) -> None:
         self._bridge.ollama_models.emit(self._corrector.list_models())
+        self._corrector.ensure_loaded()
 
     def _fill_settings(self, models: object) -> None:
         names = [str(item) for item in models] if isinstance(models, list) else []
@@ -562,6 +633,7 @@ class PersonalClipboardApp(QObject):
         self._asr.shutdown()
         self._capture.close()
         self._llm.shutdown()
+        self._history.close()
         if self._tray is not None:
             self._tray.hide()
         self._overlay.hide()

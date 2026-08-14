@@ -60,9 +60,11 @@ def packaged_exe() -> Path | None:
 
 
 def restart_command() -> list[str]:
-    exe = packaged_exe()
-    if exe is not None:
-        return [str(exe)]
+    # Frozen builds relaunch that exe. Source checkouts stay on this interpreter
+    # so tray Restart does not snap back to a stale dist/ build.
+    if getattr(sys, "frozen", False):
+        exe = packaged_exe()
+        return [str(exe if exe is not None else Path(sys.executable).resolve())]
     return [_pythonw_or_current(), "-m", "personalclipboard"]
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from PyQt6.QtCore import QByteArray, QEvent, QPoint, QRect, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QByteArray, QEvent, QPoint, QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QFont,
@@ -25,21 +25,22 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from personalclipboard.config import shell_alpha
+from personalclipboard.config import OPACITY_MAX, OPACITY_MIN, shell_alpha
 from personalclipboard.ui.i18n import flash_key, t
 from personalclipboard.ui.predict_edit import PredictLineEdit
 from personalclipboard.ui.settings_panel import SettingsPanel
+from personalclipboard.ui.theme import control_chrome, pointing
 from personalclipboard.ui.win11_resize import (
     enable_thick_frame,
     resize_hit,
     unpack_nchittest_point,
 )
 
-_ACCENT = "#c8c8cc"
 _EMPTY = "Ready to paste"
 _SENTENCE_END = ".?!。？！"
 _STATUS_LABEL = {
@@ -58,15 +59,26 @@ def _pill(fg: str, bg: str, bd: str) -> str:
     return f"color:{fg}; background:{bg}; border:1px solid {bd};"
 
 
+# Status hues match the Mic light: red = off, grey = waiting, green = live.
 _STATUS_STYLE = {
-    "off": _pill("#8e8e90", "rgba(28,28,30,95)", "rgba(90,90,94,60)"),
-    "loading": _pill("#d0d0d4", "rgba(42,42,46,105)", "rgba(120,120,124,75)"),
-    "listening": _pill("#f0f0f2", "rgba(46,46,50,110)", "rgba(140,140,144,85)"),
-    "uncertain": _pill("#b4b4b8", "rgba(36,36,38,100)", "rgba(100,100,104,70)"),
-    "locked": _pill("#f4f4f6", "rgba(52,52,56,115)", "rgba(160,160,164,90)"),
-    "recording": _pill("#f4f4f6", "rgba(58,58,62,120)", "rgba(170,170,174,95)"),
-    "quiet": _pill("#b4b4b8", "rgba(28,28,30,95)", "rgba(90,90,94,60)"),
-    "error": _pill("#c8c8cc", "rgba(26,26,28,105)", "rgba(100,100,104,75)"),
+    "off": _pill("#f0c8c4", "rgba(72,28,28,150)", "rgba(200,80,80,120)"),
+    "loading": _pill("#efe0b8", "rgba(58,48,22,140)", "rgba(180,150,70,90)"),
+    "listening": _pill("#d8f5e4", "rgba(24,56,38,150)", "rgba(80,180,110,110)"),
+    "uncertain": _pill("#ece4cc", "rgba(52,44,24,140)", "rgba(170,140,70,95)"),
+    "locked": _pill("#d8f5e4", "rgba(24,56,38,150)", "rgba(80,180,110,110)"),
+    "recording": _pill("#d8f5e4", "rgba(24,56,38,155)", "rgba(80,190,120,130)"),
+    "quiet": _pill("#d0d0d4", "rgba(36,36,40,120)", "rgba(140,140,144,80)"),
+    "error": _pill("#f0d4d0", "rgba(62,32,32,150)", "rgba(180,90,90,110)"),
+}
+
+# Phrase/live field backgrounds: empty, in-progress, ready, warning, error.
+_TEXT_TONE = {
+    "empty": ("#9c9ca4", "rgba(12,12,14,70)", "rgba(80,80,84,50)"),
+    "live": ("#d4e4f4", "rgba(28,48,72,130)", "rgba(80,130,180,95)"),
+    "correcting": ("#eee4c8", "rgba(56,46,24,135)", "rgba(180,150,70,100)"),
+    "ready": ("#d8eedc", "rgba(28,52,36,130)", "rgba(80,150,100,95)"),
+    "uncertain": ("#ece6d4", "rgba(48,42,28,125)", "rgba(160,130,70,90)"),
+    "error": ("#f0d4d0", "rgba(56,30,30,135)", "rgba(170,90,90,100)"),
 }
 
 
@@ -74,29 +86,34 @@ class Overlay(QWidget):
     enable_toggled = pyqtSignal(bool)
     hide_requested = pyqtSignal()
     copy_requested = pyqtSignal()
+    history_requested = pyqtSignal()
     phrase_completed = pyqtSignal(str)
     meeting_toggled = pyqtSignal(bool)
     prediction_requested = pyqtSignal(str)
+    retry_requested = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
         self._drag: QPoint | None = None
         self._updating_input = False
         self._typed_prev = ""
-        self._elide: dict[QLabel, tuple[str, bool]] = {}
+        self._elide: dict[QLabel, tuple[str, bool, str]] = {}
         self._meeting_on = False
         self._predict_want = True
-        self._settings_delta = (0, 0)
+        self._settings_closed_size: QSize | None = None
         self._status_key = "off"
         self._enable = QCheckBox("Mic", self)
+        self._enable.setObjectName("micToggle")
         self._status = QLabel("Mic off", self)
         self._flash_timer = QTimer(self)
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._restore_status)
         self._copy_btn = QPushButton("Copy", self)
+        self._history_btn = QPushButton("History", self)
         self._hide_btn = QPushButton("Hide", self)
+        self._brand = QLabel("Clipboard", self)
         self._lang = "en"
-        self._opacity = 35
+        self._opacity = 80
         self._empty = t("en", "empty")
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -105,28 +122,37 @@ class Overlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFont(QFont("Segoe UI", 10))
-        self.setMinimumSize(400, 220)
+        self.setMinimumWidth(440)
         self._build()
+        self._root.setSizeConstraint(QVBoxLayout.SizeConstraint.SetDefaultConstraint)
         self.resize(520, max(self.sizeHint().height(), 260))
+        self._sync_mic_dot()
 
     def _build(self) -> None:
         top = self._make_top()
-        audio, self._audio_live, self._audio_body, self._voice_title, self._hear_tag = (
-            _result_panel("Voice", live_tag="Hearing", parent=self)
-        )
+        (
+            audio,
+            self._audio_live,
+            self._audio_body,
+            self._voice_title,
+            self._hear_tag,
+            self._audio_cycle,
+        ) = _result_panel("Voice", live_tag="Hearing", parent=self)
         self._audio_frame = audio
-        audio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        audio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self._input = PredictLineEdit(self)
         self._input.setPlaceholderText("Type, then Enter or a period.")
         self._input.textChanged.connect(self._on_typed)
         self._input.returnPressed.connect(self._commit_typed_enter)
         self._input.prediction_requested.connect(self.prediction_requested.emit)
-        typed, _, self._typed_body, self._type_title, _tag = _result_panel(
+        typed, _, self._typed_body, self._type_title, _tag, self._typed_cycle = _result_panel(
             "Type", extra=self._input, parent=self
         )
+        self._audio_cycle.clicked.connect(self.retry_requested.emit)
+        self._typed_cycle.clicked.connect(self.retry_requested.emit)
         _tag.hide()
         self._typed_frame = typed
-        typed.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        typed.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         pack = _meeting_panel(self)
         meeting = pack[0]
         self._meet_btn = pack[1]
@@ -136,7 +162,7 @@ class Overlay(QWidget):
         self._meet_title = pack[5]
         self._meet_tag = pack[6]
         self._meet_frame = meeting
-        meeting.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        meeting.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self._meet_btn.clicked.connect(self._toggle_meeting)
         self.settings = SettingsPanel(self)
         self.settings.language_changed.connect(self.apply_language)
@@ -147,37 +173,47 @@ class Overlay(QWidget):
         root.setContentsMargins(16, 16, 16, 14)
         root.setSpacing(10)
         root.addLayout(top)
-        root.addWidget(audio)
-        root.addWidget(typed)
+        root.addWidget(audio, 0)
+        root.addWidget(typed, 0)
         root.addWidget(meeting, 0)
         root.addWidget(self.settings, 0)
+        self._slack = QWidget(self)
+        self._slack.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self._slack.setMinimumHeight(0)
+        root.addWidget(self._slack, 1)
         self._apply_chrome()
+        self._relabel()
         self.show_partial("")
         self.show_audio_phrase("")
         self.show_typed_phrase("")
 
     def _make_top(self) -> QHBoxLayout:
         self._enable.setToolTip("Off stops the microphone.")
-        self._enable.toggled.connect(self.enable_toggled.emit)
+        self._enable.toggled.connect(self._on_mic_toggled)
+        self._status.setObjectName("statusPill")
         self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status.setMinimumWidth(96)
+        self._status.setMinimumWidth(108)
         self._copy_btn.setObjectName("ghost")
         self._copy_btn.setToolTip("Copy the last finished sentence again")
         self._copy_btn.clicked.connect(self.copy_requested.emit)
+        self._history_btn.setObjectName("ghost")
+        self._history_btn.setToolTip("Show clipboard history.")
+        self._history_btn.clicked.connect(self.history_requested.emit)
         hide = self._hide_btn
-        hide.setObjectName("ghost")
+        hide.setObjectName("quiet")
         hide.setToolTip("Hide this window. Click the tray icon to show it.")
         hide.clicked.connect(self.hide_requested.emit)
-        brand = QLabel("PersonalClipboard")
-        brand.setStyleSheet("color:#e8e8ea; font-size:13px; font-weight:600;")
+        self._brand.setObjectName("brand")
+        pointing(self._enable, self._history_btn, self._copy_btn, hide)
         top = QHBoxLayout()
-        top.setContentsMargins(0, 4, 0, 0)
+        top.setContentsMargins(0, 6, 0, 2)
         top.setSpacing(8)
-        top.addWidget(brand)
+        top.addWidget(self._brand)
+        top.addWidget(self._history_btn)
         top.addStretch(1)
         top.addWidget(self._enable)
         top.addWidget(self._status)
-        top.addSpacing(10)
+        top.addSpacing(12)
         top.addWidget(self._copy_btn)
         top.addWidget(hide)
         return top
@@ -185,53 +221,11 @@ class Overlay(QWidget):
     def _apply_chrome(self) -> None:
         self._status.setStyleSheet(_status_chrome("off"))
         self.setStyleSheet(
-            f"""
-            QLabel {{ background: transparent; color: #d0d0d4; font-size: 13px; }}
-            QFrame#panel {{
-                background: rgba(18, 18, 20, 72);
-                border: 1px solid rgba(90, 90, 94, 55);
-                border-left: 3px solid rgba(80, 80, 84, 70);
-                border-radius: 10px;
-            }}
-            QFrame#panel[active="true"] {{
-                border: 1px solid rgba(160, 160, 164, 90);
-                border-left: 3px solid {_ACCENT};
-            }}
-            QCheckBox, QPushButton#ghost, QLineEdit, QPlainTextEdit, QComboBox {{
-                background: rgba(14, 14, 16, 88);
-                color: #ececee;
-                border: 1px solid rgba(90, 90, 94, 70);
-                padding: 6px 12px;
-                border-radius: 8px;
-                min-height: 18px;
-            }}
-            QCheckBox {{ font-size: 12px; }}
-            QCheckBox::indicator {{
-                width: 12px; height: 12px; border-radius: 6px;
-                border: 1px solid {_ACCENT}; background: rgba(18, 18, 20, 160);
-            }}
-            QCheckBox::indicator:checked {{ background: {_ACCENT}; }}
-            QPushButton#ghost {{ font-size: 12px; min-width: 56px; }}
-            QPushButton#ghost:hover, QCheckBox:hover, QLineEdit:focus,
-            QPlainTextEdit:focus, QComboBox:hover {{
-                border-color: {_ACCENT};
-                background: rgba(36, 36, 40, 110);
-            }}
-            QComboBox {{ font-size: 12px; min-height: 24px; padding: 4px 8px; }}
-            QSlider::groove:horizontal {{
-                height: 4px; background: rgba(80,80,84,90); border-radius: 2px;
-            }}
-            QSlider::handle:horizontal {{
-                width: 12px; height: 12px; margin: -4px 0; border-radius: 6px;
-                background: {_ACCENT};
-            }}
-            QLineEdit, QPlainTextEdit {{
-                font-size: 14px; min-height: 28px; padding: 8px 12px;
-                selection-background-color: #4a4a50;
-            }}
-            QPlainTextEdit {{
-                font-size: 13px; min-height: 72px;
-            }}
+            control_chrome()
+            + """
+            QLabel#statusPill {
+                font-size: 12px; font-weight: 600;
+            }
             """
         )
 
@@ -243,8 +237,8 @@ class Overlay(QWidget):
         painter.setPen(QPen(QColor(70, 70, 74, 80), 1))
         painter.drawRoundedRect(shell, 16, 16)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(200, 200, 204, 70))
-        handle = QRect(self.width() // 2 - 18, 8, 36, 4)
+        painter.setBrush(QColor(220, 220, 224, 130))
+        handle = QRect(self.width() // 2 - 20, 8, 40, 5)
         painter.drawRoundedRect(handle, 2, 2)
         painter.end()
         super().paintEvent(a0)
@@ -282,8 +276,14 @@ class Overlay(QWidget):
         if screen is None:
             return
         avail = screen.availableGeometry()
+        if self.minimumWidth() > avail.width():
+            self.setMinimumWidth(min(400, avail.width()))
+        if self.minimumHeight() > avail.height():
+            self.setMinimumHeight(avail.height())
         width = min(max(self.width(), self.minimumWidth()), avail.width())
         height = min(max(self.height(), self.minimumHeight()), avail.height())
+        height = min(height, self.maximumHeight())
+        width = min(width, self.maximumWidth())
         if width != self.width() or height != self.height():
             self.resize(width, height)
         x = min(max(self.x(), avail.x()), avail.x() + avail.width() - self.width())
@@ -307,20 +307,27 @@ class Overlay(QWidget):
 
     def show_partial(self, text: str) -> None:
         preview = live_preview(text)
-        self._set_elided(self._audio_live, preview, live=True)
+        tone = "live" if preview not in ("", "…") else "empty"
+        if self._status_key == "uncertain" and tone == "live":
+            tone = "uncertain"
+        self._set_elided(self._audio_live, preview, live=True, state=tone)
         if self._meeting_on:
-            self._set_elided(self._meet_live, preview, live=True)
+            self._set_elided(self._meet_live, preview, live=True, state=tone)
 
-    def show_audio_phrase(self, text: str) -> None:
+    def show_audio_phrase(self, text: str, *, state: str | None = None) -> None:
         stripped = text.strip()
-        _set_body(self._audio_body, stripped, self._empty)
+        tone = state or ("ready" if stripped else "empty")
+        _set_body(self._audio_body, stripped, self._empty, state=tone)
+        self._sync_output_cycle("audio", bool(stripped), busy=tone == "correcting")
         if stripped and not self._meeting_on:
             _set_active(self._audio_frame, True)
             _set_active(self._typed_frame, False)
 
-    def show_typed_phrase(self, text: str) -> None:
+    def show_typed_phrase(self, text: str, *, state: str | None = None) -> None:
         stripped = text.strip()
-        _set_body(self._typed_body, stripped, self._empty)
+        tone = state or ("ready" if stripped else "empty")
+        _set_body(self._typed_body, stripped, self._empty, state=tone)
+        self._sync_output_cycle("typed", bool(stripped), busy=tone == "correcting")
         if stripped and not self._meeting_on:
             _set_active(self._typed_frame, True)
             _set_active(self._audio_frame, False)
@@ -365,13 +372,27 @@ class Overlay(QWidget):
         # Meeting Record keeps the setting but turns the ghost off until Stop.
         self._input.set_predict_enabled(enabled and not self._meeting_on)
 
-    def apply_typed_correction(self, original: str, corrected: str) -> None:
+    def apply_typed_correction(
+        self,
+        original: str,
+        corrected: str,
+        *,
+        previous: str = "",
+    ) -> None:
         current = self._input.text().strip()
-        if current in ("", original.strip()):
+        allowed = {original.strip(), previous.strip(), ""}
+        if current in allowed:
             self.set_typed(corrected)
+
+    def _sync_output_cycle(self, source: str, filled: bool, *, busy: bool) -> None:
+        for name, button in (("audio", self._audio_cycle), ("typed", self._typed_cycle)):
+            visible = filled and name == source and not self._meeting_on
+            button.setVisible(visible)
+            button.setEnabled(visible and not busy)
 
     def set_status(self, status: str) -> None:
         self._status_key = status
+        self._sync_mic_dot()
         if not self._flash_timer.isActive():
             self._paint_status(status)
 
@@ -388,6 +409,7 @@ class Overlay(QWidget):
         self._enable.blockSignals(True)
         self._enable.setChecked(checked)
         self._enable.blockSignals(False)
+        self._sync_mic_dot()
 
     def set_listen_enabled(self, enabled: bool) -> None:
         self._enable.setEnabled(enabled)
@@ -400,14 +422,17 @@ class Overlay(QWidget):
         self.settings.retranslate(self._lang)
         blanks = {t(code, "empty") for code in ("en", "fr", "es", "de")}
         if self._audio_body.text() in blanks:
-            _set_body(self._audio_body, "", self._empty)
+            _set_body(self._audio_body, "", self._empty, state="empty")
         if self._typed_body.text() in blanks:
-            _set_body(self._typed_body, "", self._empty)
+            _set_body(self._typed_body, "", self._empty, state="empty")
         if not self._flash_timer.isActive():
             self._paint_status(self._status_key)
 
     def _relabel(self) -> None:
         lang = self._lang
+        self._brand.setText(t(lang, "app_title"))
+        self._history_btn.setText(t(lang, "history"))
+        self._history_btn.setToolTip(t(lang, "history_tip"))
         self._enable.setText(t(lang, "mic"))
         self._enable.setToolTip(t(lang, "mic_tip"))
         self._copy_btn.setText(t(lang, "copy"))
@@ -420,6 +445,9 @@ class Overlay(QWidget):
         self._type_title.setText(t(lang, "type"))
         self._input.setPlaceholderText(t(lang, "type_hint"))
         self._input.setToolTip(t(lang, "predict_tip"))
+        self._input.set_clear_labels(t(lang, "clear"), t(lang, "clear_tip"))
+        self._audio_cycle.setToolTip(t(lang, "retry_tip"))
+        self._typed_cycle.setToolTip(t(lang, "retry_tip"))
         self._meet_title.setText(t(lang, "meeting"))
         self._meet_tag.setText(t(lang, "live"))
         self._meet_btn.setText(t(lang, "stop_save" if self._meeting_on else "record"))
@@ -427,27 +455,78 @@ class Overlay(QWidget):
         self._meet_notes.setPlaceholderText(t(lang, "meet_hint"))
 
     def set_opacity(self, percent: int) -> None:
-        self._opacity = max(15, min(80, percent))
+        self._opacity = max(OPACITY_MIN, min(OPACITY_MAX, percent))
         self.update()
+
+    def _on_mic_toggled(self, checked: bool) -> None:
+        self._sync_mic_dot()
+        self.enable_toggled.emit(checked)
+
+    def _sync_mic_dot(self) -> None:
+        if not self._enable.isChecked():
+            state = "off"
+        elif self._status_key in ("listening", "locked", "recording", "uncertain"):
+            state = "live"
+        else:
+            state = "wait"
+        self._enable.setProperty("mic", state)
+        style = self._enable.style()
+        if style is not None:
+            style.unpolish(self._enable)
+            style.polish(self._enable)
+        self._enable.update()
 
     def _on_settings_expanded(self, opened: bool) -> None:
         self._fit_settings(opened)
+        QTimer.singleShot(0, self._refit_settings)
+
+    def _refit_settings(self) -> None:
+        opened = self.settings.is_expanded()
+        self._fit_settings(opened)
+        if not opened:
+            QTimer.singleShot(0, self._release_settings_max)
 
     def _fit_settings(self, opened: bool) -> None:
+        # Grow downward for Settings. Never pin min-height to the open size, or Hide cannot shrink.
         if opened:
-            need_h = self.sizeHint().height() + 36
-            need_w = max(self.width(), 580)
-            delta_w = max(need_w - self.width(), 0)
-            delta_h = max(need_h - self.height(), 56)
-            self._settings_delta = (delta_w, delta_h)
-            self.resize(self.width() + delta_w, self.height() + delta_h)
+            if self._settings_closed_size is None:
+                self._settings_closed_size = QSize(self.width(), self.height())
+            extra = self.settings.extra_open_height()
+            need_w = max(self.width(), self._settings_closed_size.width())
+            need_h = self._settings_closed_size.height() + extra
+            self.setMaximumHeight(16777215)
+            self.setMinimumHeight(self._settings_closed_size.height())
+            self.resize(need_w, need_h)
+            self.clamp_to_screen()
+            gained = self.height() - self._settings_closed_size.height()
+            self.settings.adopt_open_space(max(gained, 64))
+            return
+        closed = self._settings_closed_size
+        self.setMinimumHeight(0)
+        self._root.invalidate()
+        self._root.activate()
+        if closed is not None:
+            self.setMaximumHeight(max(closed.height(), 220))
+            self.resize(closed)
         else:
-            delta_w, delta_h = self._settings_delta
-            self._settings_delta = (0, 0)
-            self.resize(
-                max(self.width() - delta_w, self.minimumWidth()),
-                max(self.height() - delta_h, self.minimumHeight()),
+            hint_h = max(self.sizeHint().height(), 220)
+            self.setMaximumHeight(hint_h)
+            self.resize(max(self.width(), 400), hint_h)
+        self.clamp_to_screen()
+
+    def _release_settings_max(self) -> None:
+        if self.settings.is_expanded():
+            return
+        self.setMaximumHeight(16777215)
+        closed = self._settings_closed_size
+        self._settings_closed_size = None
+        if closed is not None:
+            drifted = (
+                abs(self.height() - closed.height()) > 8
+                or abs(self.width() - closed.width()) > 8
             )
+            if drifted:
+                self.resize(closed)
         self.clamp_to_screen()
 
     def _toggle_meeting(self) -> None:
@@ -456,24 +535,35 @@ class Overlay(QWidget):
     def set_meeting_recording(self, active: bool, _path: str = "") -> None:
         self._meeting_on = active
         self._meet_btn.setText(t(self._lang, "stop_save" if active else "record"))
+        self._meet_btn.setObjectName("danger" if active else "primary")
+        _polish_widget(self._meet_btn)
         self._meet_live_row.setVisible(active)
         self._meet_notes.setVisible(active)
-        policy = QSizePolicy.Policy.Expanding if active else QSizePolicy.Policy.Maximum
+        policy = QSizePolicy.Policy.Expanding if active else QSizePolicy.Policy.Minimum
         self._meet_frame.setSizePolicy(QSizePolicy.Policy.Preferred, policy)
-        self._root.setStretch(self._root.indexOf(self._meet_frame), 1 if active else 0)
+        meet_i = self._root.indexOf(self._meet_frame)
+        slack_i = self._root.indexOf(self._slack)
+        self._root.setStretch(meet_i, 1 if active else 0)
+        self._root.setStretch(slack_i, 0 if active else 1)
+        self._slack.setVisible(not active)
         _set_active(self._meet_frame, active)
         self._audio_frame.setEnabled(not active)
         self._copy_btn.setEnabled(not active)
+        self._audio_cycle.setVisible(False)
+        self._typed_cycle.setVisible(False)
         self._input.set_predict_enabled(self._predict_want and not active)
         if active:
             self._copy_btn.setToolTip(t(self._lang, "copy_meet_tip"))
-            self._set_elided(self._meet_live, "…", live=True)
+            self._set_elided(self._meet_live, "…", live=True, state="live")
             self._meet_notes.setPlainText("")
         else:
             self._copy_btn.setToolTip(t(self._lang, "copy_tip"))
+        self._sync_mic_dot()
 
     def show_meeting_partial(self, text: str) -> None:
-        self._set_elided(self._meet_live, live_preview(text), live=True)
+        preview = live_preview(text)
+        tone = "live" if preview not in ("", "…") else "empty"
+        self._set_elided(self._meet_live, preview, live=True, state=tone)
 
     def show_meeting_notes(self, text: str) -> None:
         self._meet_notes.setPlainText(text)
@@ -507,13 +597,13 @@ class Overlay(QWidget):
             if _has_words(phrase):
                 self.phrase_completed.emit(phrase)
 
-    def _set_elided(self, label: QLabel, text: str, *, live: bool) -> None:
-        self._elide[label] = (text, live)
-        _paint_elided(label, text, live=live)
+    def _set_elided(self, label: QLabel, text: str, *, live: bool, state: str = "empty") -> None:
+        self._elide[label] = (text, live, state)
+        _paint_elided(label, text, live=live, state=state)
 
     def _refresh_elides(self) -> None:
-        for label, (text, live) in self._elide.items():
-            _paint_elided(label, text, live=live)
+        for label, (text, live, state) in self._elide.items():
+            _paint_elided(label, text, live=live, state=state)
 
     def mousePressEvent(self, a0: QMouseEvent | None) -> None:
         if a0 is not None:
@@ -616,7 +706,7 @@ def _display_partial(text: str) -> str:
     return clean
 
 
-def _paint_elided(label: QLabel, text: str, *, live: bool) -> None:
+def _paint_elided(label: QLabel, text: str, *, live: bool, state: str = "empty") -> None:
     width = max(label.width() - 16, 40)
     metrics = QFontMetrics(label.font())
     source = text.strip() if text else ""
@@ -625,40 +715,76 @@ def _paint_elided(label: QLabel, text: str, *, live: bool) -> None:
     elif not source:
         source = "…"
     label.setText(metrics.elidedText(source, Qt.TextElideMode.ElideRight, width))
+    label.setStyleSheet(_field_chrome(state, size=13, pad="4px 10px", radius=6))
 
 
 def _status_chrome(status: str) -> str:
     fill = _STATUS_STYLE.get(status, _STATUS_STYLE["off"])
-    return "padding: 6px 12px; border-radius: 8px; font-size: 12px; " + fill
+    return (
+        "padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; "
+        + fill
+    )
 
 
 def _flash_chrome(text: str) -> str:
-    lowered = text.lower()
-    bad = "fail" in lowered or lowered.startswith("error") or "unavailable" in lowered
-    fill = (
-        _pill("#c8c8cc", "rgba(28,28,30,140)", "rgba(110,110,114,90)")
-        if bad
-        else _pill("#f4f4f6", "rgba(56,56,60,145)", "rgba(180,180,184,100)")
+    label = flash_label(text)
+    tones = {
+        "Error": "error",
+        "Correcting": "correcting",
+        "Loading": "correcting",
+        "Copied": "ready",
+        "Saved": "ready",
+        "Empty": "empty",
+    }
+    return (
+        "padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; "
+        + _tone_pill(tones.get(label, "ready"))
     )
-    return "padding: 6px 12px; border-radius: 8px; font-size: 12px; " + fill
+
+
+def _tone_pill(state: str) -> str:
+    fg, bg, bd = _TEXT_TONE.get(state, _TEXT_TONE["empty"])
+    return _pill(fg, bg, bd)
+
+
+def _field_chrome(state: str, *, size: int, pad: str, radius: int) -> str:
+    fg, bg, bd = _TEXT_TONE.get(state, _TEXT_TONE["empty"])
+    return (
+        f"color:{fg}; font-size:{size}px; padding:{pad}; background:{bg};"
+        f"border:1px solid {bd}; border-radius:{radius}px;"
+    )
 
 
 def _set_active(frame: QFrame, active: bool) -> None:
     frame.setProperty("active", "true" if active else "false")
-    style = frame.style()
+    _polish_widget(frame)
+
+
+def _polish_widget(widget: QWidget) -> None:
+    style = widget.style()
     if style is not None:
-        style.unpolish(frame)
-        style.polish(frame)
+        style.unpolish(widget)
+        style.polish(widget)
+    widget.update()
 
 
-def _set_body(label: QLabel, text: str, empty: str = _EMPTY) -> None:
+def _set_body(label: QLabel, text: str, empty: str = _EMPTY, *, state: str = "empty") -> None:
     filled = bool(text.strip())
     label.setText(text.strip() if filled else empty)
-    color = "#f2f2f4" if filled else "#7a7a80"
-    label.setStyleSheet(
-        f"color:{color}; font-size:15px; padding:10px 12px; background:rgba(12,12,14,70);"
-        "border:1px solid rgba(80,80,84,50); border-radius:8px;"
-    )
+    tone = state if state in _TEXT_TONE else ("ready" if filled else "empty")
+    label.setStyleSheet(_field_chrome(tone, size=15, pad="10px 12px", radius=8))
+
+
+def _icon_button(mark: str, parent: QWidget | None = None) -> QToolButton:
+    button = QToolButton(parent)
+    button.setObjectName("iconBtn")
+    button.setText(mark)
+    button.setAutoRaise(True)
+    button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    button.setFixedSize(28, 28)
+    button.setVisible(False)
+    pointing(button)
+    return button
 
 
 def _result_panel(
@@ -667,18 +793,26 @@ def _result_panel(
     live_tag: str | None = None,
     extra: QWidget | None = None,
     parent: QWidget | None = None,
-) -> tuple[QFrame, QLabel, QLabel, QLabel, QLabel]:
+) -> tuple[QFrame, QLabel, QLabel, QLabel, QLabel, QToolButton]:
     frame = QFrame(parent)
     frame.setObjectName("panel")
     frame.setProperty("active", "false")
     header = QLabel(title)
-    header.setStyleSheet("color:#c8c8cc; font-size:11px; font-weight:600;")
+    header.setObjectName("sectionTitle")
     body = QLabel(_EMPTY)
     body.setWordWrap(True)
     body.setMinimumHeight(44)
     body.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
     body.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
     _set_body(body, "")
+    cycle = _icon_button("↻", frame)
+    cycle.setAccessibleName("Retry")
+    row = QWidget(frame)
+    row_layout = QHBoxLayout(row)
+    row_layout.setContentsMargins(0, 0, 0, 0)
+    row_layout.setSpacing(6)
+    row_layout.addWidget(body, 1)
+    row_layout.addWidget(cycle, 0, Qt.AlignmentFlag.AlignTop)
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(12, 10, 12, 12)
     layout.setSpacing(8)
@@ -696,8 +830,8 @@ def _result_panel(
         tag.setParent(frame)
     if extra is not None:
         layout.addWidget(extra)
-    layout.addWidget(body)
-    return frame, live, body, header, tag
+    layout.addWidget(row)
+    return frame, live, body, header, tag, cycle
 
 
 def _meeting_panel(
@@ -707,9 +841,10 @@ def _meeting_panel(
     frame.setObjectName("panel")
     frame.setProperty("active", "false")
     header = QLabel("Meeting")
-    header.setStyleSheet("color:#c8c8cc; font-size:11px; font-weight:600;")
+    header.setObjectName("sectionTitle")
     button = QPushButton("Record")
-    button.setObjectName("ghost")
+    button.setObjectName("primary")
+    pointing(button)
     button.setToolTip(
         "Transcribe this room and save notes to the desktop. "
         "Speech goes to the file, not the clipboard. Use speakers for other voices."
@@ -742,7 +877,7 @@ def _tagged_line(tag: str, color: str) -> tuple[QWidget, QLabel, QLabel]:
     row = QWidget()
     tag_lab = QLabel(tag)
     tag_lab.setFixedWidth(62)
-    tag_lab.setStyleSheet("color:#8a8a90; font-size:11px;")
+    tag_lab.setStyleSheet("color:#a8a8ae; font-size:11px; font-weight: 600;")
     line = QLabel("…")
     line.setWordWrap(False)
     line.setFixedHeight(26)

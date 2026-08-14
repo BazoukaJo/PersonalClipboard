@@ -20,7 +20,7 @@ _README = """PersonalClipboard v0.1
 2. Unzip PersonalClipboard-0.1.0-windows-x64-cuda12.zip into the same folder
    (it adds PersonalClipboard\\_internal\\nvidia).
 3. Install Ollama for Windows and run:
-     ollama pull qwen2.5-coder:1.5b
+     ollama pull qwen2.5:1.5b
 4. Run PersonalClipboard\\PersonalClipboard.exe
 
 NVIDIA driver must be CUDA 12 capable. Whisper weights download on first launch.

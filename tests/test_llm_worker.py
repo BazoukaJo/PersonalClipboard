@@ -8,7 +8,7 @@ class _FakeCorrector:
         self.delay_s = delay_s
         self.complete_calls: list[str] = []
 
-    def correct(self, text: str) -> str:
+    def correct(self, text: str, **_kwargs: object) -> str:
         return text
 
     def complete(self, prefix: str) -> str:
@@ -42,3 +42,30 @@ def test_correct_invalidates_pending_complete() -> None:
     time.sleep(0.4)
     worker.shutdown()
     assert got == []
+
+
+def test_submit_passes_retry_options() -> None:
+    class Recording:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, object] = {}
+
+        def correct(self, text: str, **kwargs: object) -> str:
+            self.kwargs = {"text": text, **kwargs}
+            return text
+
+        def complete(self, prefix: str) -> str:
+            return ""
+
+    fake = Recording()
+    got: list[str] = []
+    worker = LlmWorker(fake, lambda _jid, text: got.append(text))
+    worker.submit("Hello.", temperature=0.55, seed=1717, vary=True)
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline and not got:
+        time.sleep(0.02)
+    worker.shutdown()
+    assert got == ["Hello."]
+    assert fake.kwargs["text"] == "Hello."
+    assert fake.kwargs["temperature"] == 0.55
+    assert fake.kwargs["seed"] == 1717
+    assert fake.kwargs["vary"] is True

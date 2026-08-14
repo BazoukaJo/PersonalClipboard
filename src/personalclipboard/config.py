@@ -17,11 +17,16 @@ WHISPER_CHOICES = (
 )
 
 OLLAMA_CHOICES = (
-    "qwen2.5-coder:1.5b",
+    "qwen2.5:1.5b",
     "qwen2.5:3b",
     "llama3.2:1b",
     "llama3.2:3b",
+    "qwen2.5-coder:1.5b",
 )
+
+OPACITY_MIN = 60
+OPACITY_MAX = 100
+OPACITY_DEFAULT = 80
 
 # HUD prefs only. Mic enable is never written — each launch starts capture-off
 # until Whisper is ready, then the overlay turns Mic on.
@@ -52,8 +57,9 @@ class Settings:
     beam_size_commit: int = 3
     condition_on_previous_text: bool = False  # overlapping windows must not inherit text
     ollama_host: str = "http://127.0.0.1:11434"
-    ollama_model: str = "qwen2.5-coder:1.5b"
+    ollama_model: str = "qwen2.5:1.5b"
     ollama_timeout_s: float = 8.0
+    ollama_keep_alive_s: int = 120  # Ollama unloads sooner unless each call sets this
     hotkey: str = "<ctrl>+<shift>+a"
     type_hotkey: str = "<ctrl>+<shift>+r"
     persist_audio: bool = False  # debug WAV only; never default on
@@ -63,7 +69,7 @@ class Settings:
     avg_logprob_min: float = -1.2
     min_commit_chars: int = 2
     ui_language: str = "en"
-    overlay_opacity: int = 35
+    overlay_opacity: int = OPACITY_DEFAULT
     vad_enabled: bool = True
     vad_silence_ms: int = 1500
     predict_enabled: bool = True
@@ -87,8 +93,11 @@ def load_settings(path: Path | None = None) -> Settings:
     for key, value in raw.items():
         if key in allowed:
             setattr(settings, key, value)
-    settings.overlay_opacity = _clamp_int(settings.overlay_opacity, 15, 80, 35)
+    settings.overlay_opacity = _clamp_int(
+        settings.overlay_opacity, OPACITY_MIN, OPACITY_MAX, OPACITY_DEFAULT
+    )
     settings.vad_silence_ms = _clamp_int(settings.vad_silence_ms, 400, 8000, 1500)
+    settings.ollama_keep_alive_s = _clamp_int(settings.ollama_keep_alive_s, 120, 3600, 120)
     if settings.ui_language not in ("en", "fr", "es", "de"):
         settings.ui_language = "en"
     if not isinstance(settings.vad_enabled, bool):
@@ -98,7 +107,7 @@ def load_settings(path: Path | None = None) -> Settings:
     if not isinstance(settings.whisper_model, str) or not settings.whisper_model.strip():
         settings.whisper_model = "large-v3-turbo"
     if not isinstance(settings.ollama_model, str) or not settings.ollama_model.strip():
-        settings.ollama_model = "qwen2.5-coder:1.5b"
+        settings.ollama_model = "qwen2.5:1.5b"
     return settings
 
 
@@ -123,6 +132,10 @@ def settings_path() -> Path:
     return data_dir() / "settings.json"
 
 
+def history_path() -> Path:
+    return data_dir() / "history.txt"
+
+
 def data_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_RUNTIME_DIR")
     path = Path(base) / "PersonalClipboard" if base else Path.home() / ".personalclipboard"
@@ -131,5 +144,5 @@ def data_dir() -> Path:
 
 
 def shell_alpha(opacity_pct: int) -> int:
-    pct = max(15, min(80, opacity_pct))
+    pct = max(OPACITY_MIN, min(OPACITY_MAX, opacity_pct))
     return int(255 * (pct / 100.0))

@@ -20,7 +20,7 @@ Then run `PersonalClipboard\PersonalClipboard.exe`.
 You still need a CUDA 12 capable **NVIDIA driver** and [Ollama for Windows](https://ollama.com/download) listening on `127.0.0.1`:
 
 ```powershell
-ollama pull qwen2.5-coder:1.5b
+ollama pull qwen2.5:1.5b
 ```
 
 Whisper weights download into the Hugging Face cache on first launch (not inside the zip). Windows Settings → Privacy → Microphone → allow desktop apps.
@@ -38,7 +38,7 @@ py -3.11 -m venv .venv
 python -m pip install --upgrade pip
 pip install -e .
 
-ollama pull qwen2.5-coder:1.5b
+ollama pull qwen2.5:1.5b
 
 pythonw -m personalclipboard
 ```
@@ -76,7 +76,7 @@ Full CUDA / cuDNN notes: [docs/SETUP.md](docs/SETUP.md).
 | **Record** | Meeting notes on the desktop. Speech goes to the file, not the clipboard. Headset calls only hear this microphone. |
 | **Settings** | Language, opacity, Whisper model, Ollama model, idle-mic-when-quiet, suggest-while-typing. Saved in LOCALAPPDATA. |
 
-Correction model: `qwen2.5-coder:1.5b` at `http://127.0.0.1:11434`. ASR partials never go to Ollama. Type-ahead uses the same model only while the Type field is focused.
+Correction model: `qwen2.5:1.5b` at `http://127.0.0.1:11434`. ASR partials never go to Ollama. Type-ahead uses the same model only while the Type field is focused.
 
 ## Dev
 

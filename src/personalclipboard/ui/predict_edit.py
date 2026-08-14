@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QKeyEvent, QPaintEvent, QPainter
-from PyQt6.QtWidgets import QLineEdit, QStyle, QStyleOptionFrame
+from PyQt6.QtGui import QColor, QKeyEvent, QPaintEvent, QPainter, QResizeEvent
+from PyQt6.QtWidgets import QLineEdit, QStyle, QStyleOptionFrame, QToolButton
 
 from personalclipboard.llm.complete import should_predict
+
+_CLEAR_SIZE = 24
+_CLEAR_MARGIN = 4
 
 
 class PredictLineEdit(QLineEdit):
@@ -24,6 +27,26 @@ class PredictLineEdit(QLineEdit):
         self._debounce.setInterval(380)
         self._debounce.timeout.connect(self._emit_request)
         self.textChanged.connect(self._on_text)
+        self._clear = QToolButton(self)
+        self._clear.setObjectName("iconBtn")
+        self._clear.setText("✕")
+        self._clear.setAutoRaise(True)
+        self._clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._clear.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._clear.setToolTip("Clear the Type field.")
+        self._clear.setAccessibleName("Clear")
+        self._clear.clicked.connect(self.clear_line)
+        self._sync_clear()
+
+    def set_clear_labels(self, name: str, tip: str) -> None:
+        self._clear.setAccessibleName(name)
+        self._clear.setToolTip(tip)
+
+    def clear_line(self) -> None:
+        self.set_blocked(True)
+        self.clear_ghost()
+        self.clear()
+        self.set_blocked(False)
 
     def set_predict_enabled(self, enabled: bool) -> None:
         self._enabled = enabled
@@ -98,6 +121,10 @@ class PredictLineEdit(QLineEdit):
         self.clear_ghost()
         super().focusOutEvent(a0)
 
+    def resizeEvent(self, a0: QResizeEvent | None) -> None:
+        super().resizeEvent(a0)
+        self._layout_clear()
+
     def paintEvent(self, a0: QPaintEvent | None) -> None:
         super().paintEvent(a0)
         # Ghost sits after the typed text; skip if the cursor is not at the end.
@@ -128,6 +155,7 @@ class PredictLineEdit(QLineEdit):
     def _on_text(self, _text: str) -> None:
         self.clear_ghost()
         self._debounce.stop()
+        self._sync_clear()
         if should_predict(
             self.text(),
             focused=self.hasFocus(),
@@ -135,6 +163,23 @@ class PredictLineEdit(QLineEdit):
             blocked=self._blocked,
         ):
             self._debounce.start()
+
+    def _sync_clear(self) -> None:
+        self._clear.setVisible(bool(self.text()))
+        self._layout_clear()
+
+    def _layout_clear(self) -> None:
+        if not self._clear.isVisible():
+            self.setTextMargins(0, 0, 0, 0)
+            return
+        self.setTextMargins(0, 0, _CLEAR_SIZE + 2, 0)
+        y_pos = max((self.height() - _CLEAR_SIZE) // 2, 2)
+        self._clear.setGeometry(
+            self.width() - _CLEAR_SIZE - _CLEAR_MARGIN,
+            y_pos,
+            _CLEAR_SIZE,
+            _CLEAR_SIZE,
+        )
 
     def _emit_request(self) -> None:
         if should_predict(

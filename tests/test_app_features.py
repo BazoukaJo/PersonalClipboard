@@ -7,8 +7,10 @@ import time
 from pathlib import Path
 
 import pytest
+from PyQt6.QtWidgets import QLabel
 
 from personalclipboard.app import PersonalClipboardApp
+from personalclipboard.clipboard.history import ClipboardHistory
 from personalclipboard.config import Settings
 
 
@@ -39,13 +41,14 @@ class FakeWindows:
 
 
 @pytest.fixture
-def pc_app(qapp, monkeypatch):
+def pc_app(qapp, monkeypatch, tmp_path):
     monkeypatch.setattr("personalclipboard.clipboard.service.play_copy_cue", lambda: None)
     monkeypatch.setattr("personalclipboard.app.play_copy_cue", lambda: None)
     settings = Settings()
-    app = PersonalClipboardApp(qapp, settings, start_background=False)
+    history = ClipboardHistory(tmp_path / "history.txt", threaded=False)
+    app = PersonalClipboardApp(qapp, settings, start_background=False, history=history)
     submitted: list[str] = []
-    app._llm.submit = lambda text: submitted.append(text) or 1
+    app._llm.submit = lambda text, **_kwargs: submitted.append(text) or 1
     app.submitted = submitted  # type: ignore[attr-defined]
     fake = FakeWindows()
     app._windows = fake  # type: ignore[assignment]
@@ -67,6 +70,35 @@ def test_copy_button_writes_last_ready(pc_app) -> None:
     pc_app._last_ready = "Hello from copy."
     pc_app._copy_ready()
     assert pc_app._clipboard.read() == "Hello from copy."
+    assert "Hello from copy." in pc_app._history.path.read_text(encoding="utf-8")
+
+
+def test_history_button_opens_modal(pc_app, monkeypatch) -> None:
+    from datetime import datetime
+
+    seen: list[list[str]] = []
+
+    def fake_exec(self) -> int:
+        bodies = [
+            label.text()
+            for label in self.findChildren(QLabel)
+            if label.objectName() == "historyBody"
+        ]
+        seen.append(bodies)
+        return 0
+
+    monkeypatch.setattr("personalclipboard.app.HistoryDialog.exec", fake_exec)
+    pc_app._history._record("Hello history.", datetime(2026, 8, 14, 13, 0, 0))
+    pc_app._open_history()
+    assert seen
+    assert seen[0] == ["Hello history."]
+
+
+def test_copy_history_entry_does_not_relog(pc_app) -> None:
+    pc_app._history.path.write_text("", encoding="utf-8")
+    pc_app._copy_history_entry("From history.")
+    assert pc_app._clipboard.read() == "From history."
+    assert pc_app._history.path.read_text(encoding="utf-8") == ""
 
 
 def test_copy_button_empty(pc_app) -> None:
@@ -205,8 +237,10 @@ def test_settings_language_persists(pc_app, monkeypatch) -> None:
 
 def test_settings_opacity_and_vad(pc_app) -> None:
     pc_app._booting = False
-    pc_app._on_opacity_changed(55)
-    assert pc_app._settings.overlay_opacity == 55
+    pc_app._on_opacity_changed(75)
+    assert pc_app._settings.overlay_opacity == 75
+    pc_app._on_opacity_changed(40)
+    assert pc_app._settings.overlay_opacity == 60
     pc_app._on_vad_changed(False)
     assert pc_app._settings.vad_enabled is False
 
@@ -280,3 +314,42 @@ def test_type_hotkey_stays_when_no_other_app(pc_app, monkeypatch) -> None:
     pc_app._on_type_focus()
     assert pc_app._windows.foreign_calls == 1
     assert pc_app._overlay._status.text()
+
+
+def test_cycle_rotates_then_retries_original(pc_app) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_submit(text: str, **kwargs: object) -> int:
+        calls.append((text, dict(kwargs)))
+        return 1
+
+    pc_app._llm.submit = fake_submit
+    pc_app._finish_phrase("Hello there.", "audio")
+    assert calls == [("Hello there.", {})]
+    pc_app._on_corrected("Hi there.")
+    assert pc_app._clipboard.read() == "Hi there."
+    pc_app._on_retry_requested()
+    assert pc_app._clipboard.read() == "Hello there."
+    assert len(calls) == 1
+    pc_app._on_retry_requested()
+    assert pc_app._clipboard.read() == "Hi there."
+    pc_app._on_retry_requested()
+    assert len(calls) == 2
+    assert calls[1][0] == "Hello there."
+    assert calls[1][1]["vary"] is True
+    assert calls[1][1]["temperature"] >= 0.55
+    pc_app._on_corrected("Hey there.")
+    assert pc_app._clipboard.read() == "Hey there."
+    history = pc_app._history.path.read_text(encoding="utf-8")
+    assert history.count("Hello there.") <= 1
+    assert "Hey there." in history
+
+
+def test_cycle_hidden_during_meeting(pc_app, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("personalclipboard.app.desktop_directory", lambda: tmp_path)
+    pc_app._finish_phrase("Hello there.", "audio")
+    pc_app._on_corrected("Hi there.")
+    assert pc_app._overlay._audio_cycle.isVisible()
+    pc_app._start_meeting()
+    assert not pc_app._overlay._audio_cycle.isVisible()
+    pc_app._stop_meeting(restore_mic=False)

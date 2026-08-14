@@ -37,7 +37,7 @@ Meeting Record → same ASR → desktop markdown (no clipboard)
 - **Never** send partial ASR hypotheses to Ollama. Correct on commit or hotkey only. Type-field ghost completion may call the same localhost model **only** while the Type field is focused (Tab accepts).
 - `condition_on_previous_text=False` on streaming windows.
 
-Defaults: Whisper `large-v3-turbo` / `turbo`, `device="cuda"`, `compute_type="float16"`, `beam_size=1` partials / `3` commit. Correction model: `qwen2.5-coder:1.5b` (~1 GB) so other GPU apps can share VRAM. Do not default to 14B+.
+Defaults: Whisper `large-v3-turbo` / `turbo`, `device="cuda"`, `compute_type="float16"`, `beam_size=1` partials / `3` commit. Correction model: `qwen2.5:1.5b` (~1 GB) so other GPU apps can share VRAM. Do not default to 14B+.
 
 Latency targets: overlay partials **< ~400 ms**; clipboard commit **< ~1 s** after end of sentence.
 

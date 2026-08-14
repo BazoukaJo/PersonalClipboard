@@ -27,6 +27,7 @@ class SettingsPanel(QFrame):
     ollama_changed = pyqtSignal(str)
     vad_changed = pyqtSignal(bool)
     predict_changed = pyqtSignal(bool)
+    expanded_changed = pyqtSignal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -40,8 +41,8 @@ class SettingsPanel(QFrame):
         self._body = QFrame(self)
         self._body.setVisible(False)
         body_layout = QVBoxLayout(self._body)
-        body_layout.setContentsMargins(0, 0, 0, 0)
-        body_layout.setSpacing(8)
+        body_layout.setContentsMargins(2, 6, 2, 4)
+        body_layout.setSpacing(12)
         body_layout.addLayout(_row(self._lang_label, self._lang_box))
         body_layout.addLayout(_row(self._opacity_label, self._opacity))
         body_layout.addLayout(_row(self._whisper_label, self._whisper))
@@ -146,10 +147,32 @@ class SettingsPanel(QFrame):
         self._body.setVisible(self._open)
         self._toggle.setText(t(self._lang, "hide") if self._open else t(self._lang, "settings"))
         self.setProperty("active", "true" if self._open else "false")
+        self._scale_body(self._open)
         style = self.style()
         if style is not None:
             style.unpolish(self)
             style.polish(self)
+        self.updateGeometry()
+        self.expanded_changed.emit(self._open)
+
+    def _scale_body(self, opened: bool) -> None:
+        # Closed chrome stays compact. Opened controls need more type size or they look shrunk.
+        if not opened:
+            self._body.setStyleSheet("")
+            return
+        self._body.setStyleSheet(
+            """
+            QLabel { color:#e4e4e8; font-size:14px; }
+            QComboBox {
+                font-size:14px; min-height:30px; padding:6px 12px;
+            }
+            QCheckBox { font-size:14px; min-height:26px; padding:8px 12px; }
+            QCheckBox::indicator { width:14px; height:14px; border-radius:7px; }
+            QSlider { min-height:20px; }
+            QSlider::groove:horizontal { height:6px; }
+            QSlider::handle:horizontal { width:14px; height:14px; margin:-4px 0; }
+            """
+        )
 
     def _emit_language(self) -> None:
         if not self._updating:
@@ -182,7 +205,7 @@ def _row(label: QLabel, widget) -> QHBoxLayout:
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(8)
-    label.setMinimumWidth(78)
+    label.setMinimumWidth(96)
     row.addWidget(label)
     row.addWidget(widget, 1)
     return row

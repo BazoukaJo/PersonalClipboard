@@ -86,6 +86,7 @@ class Overlay(QWidget):
         self._elide: dict[QLabel, tuple[str, bool]] = {}
         self._meeting_on = False
         self._predict_want = True
+        self._settings_delta = (0, 0)
         self._status_key = "off"
         self._enable = QCheckBox("Mic", self)
         self._status = QLabel("Mic off", self)
@@ -140,6 +141,7 @@ class Overlay(QWidget):
         self.settings = SettingsPanel(self)
         self.settings.language_changed.connect(self.apply_language)
         self.settings.opacity_changed.connect(self.set_opacity)
+        self.settings.expanded_changed.connect(self._on_settings_expanded)
         root = QVBoxLayout(self)
         self._root = root
         root.setContentsMargins(16, 16, 16, 14)
@@ -427,6 +429,26 @@ class Overlay(QWidget):
     def set_opacity(self, percent: int) -> None:
         self._opacity = max(15, min(80, percent))
         self.update()
+
+    def _on_settings_expanded(self, opened: bool) -> None:
+        self._fit_settings(opened)
+
+    def _fit_settings(self, opened: bool) -> None:
+        if opened:
+            need_h = self.sizeHint().height() + 36
+            need_w = max(self.width(), 580)
+            delta_w = max(need_w - self.width(), 0)
+            delta_h = max(need_h - self.height(), 56)
+            self._settings_delta = (delta_w, delta_h)
+            self.resize(self.width() + delta_w, self.height() + delta_h)
+        else:
+            delta_w, delta_h = self._settings_delta
+            self._settings_delta = (0, 0)
+            self.resize(
+                max(self.width() - delta_w, self.minimumWidth()),
+                max(self.height() - delta_h, self.minimumHeight()),
+            )
+        self.clamp_to_screen()
 
     def _toggle_meeting(self) -> None:
         self.meeting_toggled.emit(not self._meeting_on)

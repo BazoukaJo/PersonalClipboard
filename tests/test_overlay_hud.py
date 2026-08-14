@@ -54,3 +54,19 @@ def test_settings_panel_emits_language_opacity_vad(qapp) -> None:
     )
     assert langs == ["fr"]
     panel.deleteLater()
+
+
+def test_opening_settings_grows_overlay(qapp) -> None:
+    assert qapp is not None
+    overlay = Overlay()
+    overlay.show()
+    qapp.processEvents()
+    before_h = overlay.height()
+    before_w = overlay.width()
+    overlay.settings._toggle.click()
+    qapp.processEvents()
+    assert overlay.height() >= before_h + 40
+    assert overlay.width() >= before_w
+    overlay.settings._toggle.click()
+    qapp.processEvents()
+    overlay.close()

@@ -44,7 +44,7 @@ venvPath = "."
 venv = ".venv"
 
 [tool.pylint.main]
-extension-pkg-allow-list = ["PyQt6"]
+extension-pkg-allow-list = ["PyQt6", "sounddevice"]
 
 [tool.pylint.design]
 max-attributes = 40

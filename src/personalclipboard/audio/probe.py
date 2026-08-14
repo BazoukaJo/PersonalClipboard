@@ -6,6 +6,8 @@ import threading
 from collections.abc import Callable
 
 import numpy as np
+import pyaudio
+import sounddevice as sd
 
 from personalclipboard.config import Settings
 
@@ -61,8 +63,6 @@ def _peek_rms(sample_rate: int, seconds: float) -> float:
 
 
 def _peek_sounddevice(sample_rate: int, frames: int) -> float:
-    import sounddevice as sd
-
     audio = sd.rec(
         frames,
         samplerate=sample_rate,
@@ -76,8 +76,6 @@ def _peek_sounddevice(sample_rate: int, frames: int) -> float:
 
 
 def _peek_pyaudio(sample_rate: int, frames: int) -> float:
-    import pyaudio
-
     pa = pyaudio.PyAudio()
     stream = None
     try:

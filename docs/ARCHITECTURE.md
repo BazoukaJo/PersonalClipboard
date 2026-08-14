@@ -7,15 +7,16 @@ Whisper is a fixed-context encoder-decoder. “Near-zero delay” is an engineer
 ## 1. Pipeline
 
 ```
-Mic (WASAPI)
-  → PyAudio callback (~20 ms, 16 kHz mono)
+Mic (WASAPI via PyAudio, sounddevice fallback)
+  → callback (~20 ms, 16 kHz mono)
   → lock-free ring buffer
   → ASR worker (faster-whisper CUDA, overlapping windows)
        → partial hypothesis → Qt overlay
        → committed sentence → LLM worker (Ollama 127.0.0.1)
             → QClipboard
-Ctrl+Shift+A → LLM worker (active mode prompt) → QClipboard
-Enable switch OFF → stop stream + idle ASR worker
+Quiet (app VAD, Mic ON) → stop stream + idle CUDA; short probe wakes on speech
+Enable switch OFF → stop stream, stop probe, idle ASR (no wake)
+Ctrl+Shift+A → LLM worker (dictation prompt) → QClipboard
 ```
 
 ## 2. Threads
@@ -48,11 +49,11 @@ segments, info = model.transcribe(
     audio_window,
     beam_size=1,
     condition_on_previous_text=False,
-    vad_filter=False,  # capture stays always-on while enable is ON
+    vad_filter=False,  # Whisper Silero filter off; app QuietIdle owns idle/wake
 )
 ```
 
-`vad_filter` stays off for capture policy. If Silero is added later, use it only as a **boundary/confidence hint**, not to skip the callback.
+Keep Faster-Whisper `vad_filter=False` so the app owns chunking. App-level VAD (`QuietIdle`) may **stop the streaming callback** after `vad_silence_ms` of quiet and idle CUDA; `WakeProbe` peeks (~80 ms) until speech, then capture resumes. That is not Whisper's `vad_filter`. Meeting Record does not VAD-idle. Mic OFF still stops the probe.
 
 ## 4. Latency budget
 
@@ -73,22 +74,23 @@ If hop + decode exceeds 400 ms, shrink hop before shrinking the model. If anothe
 
 | Resident | Approx. VRAM | Role |
 |---|---|---|
-| faster-whisper `large-v3-turbo` FP16 | ~3 GB | Always-on ASR while enable is ON |
+| faster-whisper `large-v3-turbo` FP16 | ~3 GB | Resident ASR while Mic is ON (idled during VAD quiet) |
 | `qwen2.5-coder:1.5b` (Ollama) | ~1 GB | Sentence correction |
 | Other GPU apps + OS | remainder | Must still fit |
 | Headroom | ~7+ GB | Keep the 1.5B default while the card is shared |
 
 Do not default a 7B+ correction model while other GPU apps may be open.
 
-## 6. Enable switch
+## 6. Enable switch and VAD idle
 
-OFF is a hard privacy boundary:
+**Mic OFF** is a hard privacy boundary:
 
-1. Stop the PyAudio/WASAPI stream (callback no longer runs).
-2. ASR worker exits its loop or waits on an idle event (no further CUDA transcribe).
-3. Overlay status `off`. LLM worker remains available for `Ctrl+Shift+A`.
+1. Stop the streaming capture (PyAudio or sounddevice; callback no longer runs).
+2. Stop `WakeProbe` (no background peeks).
+3. ASR worker waits on an idle event (no further CUDA transcribe).
+4. Overlay status `off`. LLM worker remains available for `Ctrl+Shift+A`.
 
-ON reverses 1–3 and keeps the Whisper model in VRAM (load once at app start or on first ON).
+**Mic ON** starts the stream and hop loop. After `vad_silence_ms` of VoiceGate silence (default 1.5 s, HUD toggle), the app stops the stream, idles CUDA, overlay status `quiet`, and `WakeProbe` takes short blocking peeks until speech. Whisper weights stay in VRAM. Meeting Record keeps the stream up.
 
 ## 7. Cacophony (v1)
 
@@ -103,6 +105,7 @@ No pyannote on the hot path.
 - Ambient: commit → (optional) Ollama → `QClipboard.setText`.
 - `Ctrl+Shift+A`: read clipboard → Ollama with the dictation system prompt → write back. Independent of enable.
 - Register the hotkey with `pynput` (global). `QShortcut` only works when the overlay is focused.
+- One process only. A new launch asks the running instance to quit (CUDA unload), then binds the instance socket. If the old process hangs, it is terminated.
 
 ## 9. Meeting notes
 
@@ -113,12 +116,16 @@ Meeting Record uses the same ASR worker with VoiceGate lock off and voice comman
 | Module | Responsibility |
 |---|---|
 | `app.py` | `QApplication`, tray, start/stop workers |
-| `config.py` | Enable flag, model names, hop, hotkey, Ollama host |
-| `audio/capture.py` | PyAudio WASAPI → ring buffer |
+| `config.py` | Models, hop, hotkey, Ollama host, HUD language/opacity/VAD (LOCALAPPDATA) |
+| `audio/capture.py` | PyAudio WASAPI → ring; `sounddevice` fallback |
+| `audio/probe.py` | Short peeks to wake capture after VAD idle |
 | `asr/engine.py` | CUDA Faster-Whisper worker |
-| `llm/corrector.py` | Localhost Ollama |
+| `asr/vad.py` | Silence timer (`QuietIdle`) |
+| `llm/corrector.py` | Localhost Ollama + `/api/tags` |
 | `clipboard/service.py` | Qt clipboard read/write |
-| `ui/overlay.py` | Transparent widget + status |
+| `ui/overlay.py` | Translucent HUD + status |
+| `ui/settings_panel.py` | Language, opacity, models, VAD toggle |
+| `ui/i18n.py` | en / fr / es / de HUD strings |
 | `hotkeys/bindings.py` | `Ctrl+Shift+A` |
 | `modes/ambient.py` | Prose correction prompt |
 | `notes/meeting.py` | Desktop markdown meeting notes |

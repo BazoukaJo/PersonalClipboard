@@ -29,7 +29,8 @@ def about_body() -> str:
         "Finish a spoken or typed phrase with a period to correct and copy.\n"
         "Say paste last, copy last, or correct last.\n"
         "Ctrl+Shift+A reformats the current clipboard.\n"
-        "Record meeting transcribes the room and saves notes on the desktop.\n\n"
+        "Record meeting transcribes the room and saves notes on the desktop.\n"
+        "Starting the app again replaces the running overlay.\n\n"
         "Uncheck Mic to idle the microphone."
     )
 

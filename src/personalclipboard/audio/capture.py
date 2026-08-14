@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pyaudio
 
@@ -60,17 +62,24 @@ class RingBuffer:
 
 
 class AudioCapture:
-    """Owns the PortAudio stream. Enable OFF must stop the stream."""
+    """Owns the input stream. Enable OFF must stop the stream."""
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self.ring = RingBuffer(settings.sample_rate, settings.ring_seconds)
         self._pa: pyaudio.PyAudio | None = None
         self._stream: pyaudio.Stream | None = None
+        self._sd_stream: Any = None
         self.device_name: str = ""
+        self.backend: str = ""
 
     @property
     def active(self) -> bool:
+        if self._sd_stream is not None:
+            try:
+                return bool(getattr(self._sd_stream, "active", False))
+            except Exception:
+                return False
         if self._stream is None:
             return False
         try:
@@ -82,6 +91,52 @@ class AudioCapture:
         """Open 16 kHz mono; callback writes the ring buffer only."""
         if self.active:
             return
+        py_error: Exception | None = None
+        try:
+            self._start_pyaudio()
+            return
+        except Exception as exc:
+            py_error = exc
+            self.stop()
+        try:
+            self._start_sounddevice()
+        except Exception as sd_error:
+            detail = f"PyAudio: {py_error}; sounddevice: {sd_error}"
+            raise OSError(f"No usable microphone ({detail})") from sd_error
+
+    def stop(self) -> None:
+        """Stop the stream so the callback no longer runs (privacy kill switch)."""
+        stream = self._stream
+        self._stream = None
+        if stream is not None:
+            try:
+                stream.stop_stream()
+            except Exception:
+                pass
+            try:
+                stream.close()
+            except Exception:
+                pass
+        sd_stream = self._sd_stream
+        self._sd_stream = None
+        if sd_stream is not None:
+            try:
+                sd_stream.stop()
+            except Exception:
+                pass
+            try:
+                sd_stream.close()
+            except Exception:
+                pass
+        self.backend = ""
+
+    def close(self) -> None:
+        self.stop()
+        if self._pa is not None:
+            self._pa.terminate()
+            self._pa = None
+
+    def _start_pyaudio(self) -> None:
         frame_samples = max(int(self._settings.sample_rate * self._settings.frame_ms / 1000), 1)
         if self._pa is None:
             self._pa = pyaudio.PyAudio()
@@ -103,6 +158,7 @@ class AudioCapture:
                 self._stream = self._pa.open(**kwargs)
                 self._stream.start_stream()
                 self.device_name = label
+                self.backend = "pyaudio"
                 return
             except Exception as exc:
                 last_error = exc
@@ -112,30 +168,44 @@ class AudioCapture:
             raise OSError(f"No usable microphone: {last_error}") from last_error
         raise OSError("No input devices found. Set a default microphone in Windows Sound settings.")
 
-    def stop(self) -> None:
-        """Stop the stream so the callback no longer runs (privacy kill switch)."""
-        stream = self._stream
-        self._stream = None
-        if stream is not None:
-            try:
-                stream.stop_stream()
-            except Exception:
-                pass
-            try:
-                stream.close()
-            except Exception:
-                pass
+    def _start_sounddevice(self) -> None:
+        import sounddevice as sd
 
-    def close(self) -> None:
-        self.stop()
-        if self._pa is not None:
-            self._pa.terminate()
-            self._pa = None
+        frame_samples = max(int(self._settings.sample_rate * self._settings.frame_ms / 1000), 1)
+        last_error: Exception | None = None
+        for index, label in _ranked_sd_devices(self._settings.preferred_input):
+            try:
+                stream = sd.InputStream(
+                    samplerate=self._settings.sample_rate,
+                    channels=1,
+                    dtype="float32",
+                    blocksize=frame_samples,
+                    device=index,
+                    callback=self._sd_callback,
+                )
+                stream.start()
+                self._sd_stream = stream
+                self.device_name = label
+                self.backend = "sounddevice"
+                return
+            except Exception as exc:
+                last_error = exc
+                self._sd_stream = None
+        if last_error is not None:
+            raise OSError(f"sounddevice failed: {last_error}") from last_error
+        raise OSError("sounddevice found no input devices.")
 
     def _callback(self, in_data: bytes | None, _frame_count: int, _time_info: dict, _status: int):
         if in_data:
             self.ring.write(in_data)
         return (None, pyaudio.paContinue)
+
+    def _sd_callback(self, indata, _frames: int, _time_info: object, _status: object) -> None:
+        if indata is None or getattr(indata, "size", 0) == 0:
+            return
+        mono = indata[:, 0] if getattr(indata, "ndim", 1) > 1 else indata
+        pcm = np.clip(np.asarray(mono) * 32767.0, -32768, 32767).astype(np.int16).tobytes()
+        self.ring.write(pcm)
 
 
 def _ranked_input_devices(pa: pyaudio.PyAudio, preferred: str) -> list[tuple[int, str]]:
@@ -150,6 +220,30 @@ def _ranked_input_devices(pa: pyaudio.PyAudio, preferred: str) -> list[tuple[int
         host_api = str(api.get("name") or "")
         score = _score_device(name, host_api, preferred)
         ranked.append((score, i, name))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [(index, name) for _score, index, name in ranked]
+
+
+def _ranked_sd_devices(preferred: str) -> list[tuple[int, str]]:
+    import sounddevice as sd
+
+    ranked: list[tuple[int, int, str]] = []
+    host_names = []
+    try:
+        host_names = [str(item.get("name") or "") for item in sd.query_hostapis()]
+    except Exception:
+        host_names = []
+    try:
+        devices = sd.query_devices()
+    except Exception:
+        return []
+    for index, info in enumerate(devices):
+        if int(info.get("max_input_channels") or 0) < 1:
+            continue
+        name = str(info.get("name") or f"device {index}")
+        api_index = int(info.get("hostapi") or 0)
+        host_api = host_names[api_index] if 0 <= api_index < len(host_names) else ""
+        ranked.append((_score_device(name, host_api, preferred), index, name))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [(index, name) for _score, index, name in ranked]
 

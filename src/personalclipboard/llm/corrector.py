@@ -46,6 +46,28 @@ class Corrector:
         except Exception:
             return stripped
 
+    def list_models(self) -> list[str]:
+        names = {self._settings.ollama_model}
+        payload = _get_json(f"{self._settings.ollama_host.rstrip('/')}/api/tags", timeout=2.0)
+        if isinstance(payload, dict):
+            models = payload.get("models")
+            if isinstance(models, list):
+                for item in models:
+                    if isinstance(item, dict):
+                        name = item.get("name")
+                        if isinstance(name, str) and name.strip():
+                            names.add(name.strip())
+        return sorted(names)
+
+
+def _get_json(url: str, *, timeout: float) -> object:
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+        return {}
+
 
 def _post_chat(url: str, *, timeout: float, body: Mapping[str, Any]) -> object:
     request = urllib.request.Request(

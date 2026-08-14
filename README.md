@@ -6,7 +6,7 @@ Hardware target: **Intel i9-14900K** + **NVIDIA RTX 4070 Ti SUPER** (16 GB).
 
 ![PersonalClipboard overlay](docs/images/overlay.png)
 
-The HUD is a translucent always-on-top tool window. **Mic** is the privacy kill switch. **Voice** shows the live partial and the last sentence that landed on the clipboard. **Type** is the same correct-and-copy flow from the keyboard. **Meeting → Record** transcribes the room to a markdown file on the desktop and does not write the clipboard.
+The HUD is a translucent always-on-top tool window. **Mic** is the privacy kill switch. After a short silence, VAD stops the streaming microphone and idles Whisper; speech wakes them. **Settings** on the HUD picks language (English, Français, Español, Deutsch), opacity, Whisper model, and Ollama corrector. **Voice** shows the live partial and the last sentence. **Type** is the same correct-and-copy flow. **Meeting → Record** transcribes the room to a desktop markdown file.
 
 ## Easy install (Windows)
 
@@ -30,7 +30,9 @@ A **PersonalClipboard** shortcut on the Windows desktop (local only, not in this
 
 The first launch downloads Faster-Whisper `large-v3-turbo` into the Hugging Face cache and loads it on the GPU. Use `python -m personalclipboard` instead of `pythonw` if you want a console for errors.
 
-Windows Settings → Privacy → Microphone → allow desktop apps. After Whisper is ready, **Mic** turns on. Uncheck it to stop the WASAPI stream and idle CUDA ASR.
+Only one overlay can run. Starting it again (desktop shortcut, tray **Restart**, or `pythonw -m personalclipboard`) stops the current process and starts a fresh one.
+
+Windows Settings → Privacy → Microphone → allow desktop apps. After Whisper is ready, **Mic** turns on. Uncheck it to stop capture (no VAD probe). If PyAudio cannot open a device, capture falls back to **sounddevice**.
 
 Full CUDA / cuDNN notes: [docs/SETUP.md](docs/SETUP.md).
 
@@ -45,7 +47,7 @@ Full CUDA / cuDNN notes: [docs/SETUP.md](docs/SETUP.md).
 | Say **copy last** | Copies the selection from the last other window. |
 | Say **correct last** or **Ctrl+Shift+A** | Rewrites the current clipboard (works with Mic off). |
 | **Record** | Meeting notes on the desktop. Speech goes to the file, not the clipboard. Headset calls only hear this microphone. |
-| **Hide** | Overlay to the tray. Right-click for Show, Stop, Restart, About. |
+| **Settings** | Language, opacity, Whisper model, Ollama model, idle-mic-when-quiet. Saved in LOCALAPPDATA. |
 
 Correction model: `qwen2.5-coder:1.5b` at `http://127.0.0.1:11434`. Partials never go to Ollama.
 

@@ -8,11 +8,11 @@ alwaysApply: false
 
 Whisper is not a native streaming model. Low latency = short overlapping windows + a resident CUDA model.
 
-- Capture: WASAPI via PyAudio, 16 kHz mono, ~20 ms frames, lock-free ring buffer.
+- Capture: WASAPI via PyAudio, 16 kHz mono, ~20 ms frames, lock-free ring buffer. **sounddevice** is the fallback if PyAudio cannot open a device.
 - Windows: ~2.0 s audio, 250 ms hop. `condition_on_previous_text=False`. Stitch overlapping windows; commit only on `.` `?` `!`.
-- Model: `large-v3-turbo` (`turbo`), `device="cuda"`, `compute_type="float16"`.
+- Model: `large-v3-turbo` (`turbo`), `device="cuda"`, `compute_type="float16"`. HUD Settings can pick another Faster-Whisper size (reload).
 - `beam_size=1` on partials. Partials → overlay only. Whole-phrase voice commands (`paste last`, `copy last`, `correct last`) skip Ollama.
-- Enable OFF must stop the PortAudio stream and idle the ASR worker.
-- Voice gate (RMS + spectral centroid) skips ASR on silence and other speakers. Capture stays running while Listen is ON.
+- Enable OFF must stop the stream, stop the VAD probe, and idle the ASR worker.
+- Voice gate (RMS + spectral centroid) skips ASR on other speakers.
+- VAD: after `vad_silence_ms` of quiet, stop the streaming mic and idle CUDA. A short blocking probe wakes capture on speech. Meeting Record keeps the stream open.
 - Also gate on `no_speech_prob` and avg logprob. Do not overwrite clipboard on reject. No pyannote on the hot path.
-- VAD is a chunk-boundary / confidence hint only — never a reason to skip capture while enable is ON.

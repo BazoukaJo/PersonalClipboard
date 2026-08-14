@@ -32,7 +32,7 @@ python -m pip install --upgrade pip
 pip install -e ".[dev]"
 ```
 
-`pyproject.toml` installs: `faster-whisper`, `PyAudio`, `PyQt6`, `ollama`, `numpy`, `pynput`, and the NVIDIA CUDA 12 wheels.
+`pyproject.toml` installs: `faster-whisper`, `PyAudio`, `sounddevice`, `PyQt6`, `ollama`, `numpy`, `pynput`, and the NVIDIA CUDA 12 wheels.
 
 PyAudio on Windows usually has a wheel on PyPI. If `pip` tries to compile it, install [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
@@ -61,7 +61,7 @@ Keep the default at `qwen2.5-coder:1.5b` (~1 GB) so other GPU work can share the
 pythonw -m personalclipboard
 ```
 
-Use `python -m personalclipboard` for a console. After Whisper loads, Mic turns on. Uncheck Mic to idle capture and CUDA ASR. Ctrl+Shift+A still reformats the clipboard.
+Use `python -m personalclipboard` for a console. After Whisper loads, Mic turns on. Uncheck Mic to idle capture and CUDA ASR. Ctrl+Shift+A still reformats the clipboard. A second launch replaces the running instance.
 
 Preferred WASAPI input: a device whose name contains `maono` when present (`config.py` `preferred_input`).
 

@@ -36,8 +36,9 @@ Single local user on this PC.
 ### 4.1 Capture and enable switch
 
 - FR-C1: Master enable switch in the overlay (and tray). ON starts WASAPI capture + CUDA ASR. OFF stops the PortAudio stream and idles the ASR worker (privacy kill switch).
-- FR-C2: While ON, capture is always-on (overlapping windows). VAD must not drop capture; it may only hint chunk boundaries and confidence.
-- FR-C3: Default format 16 kHz mono PCM via PyAudio (WASAPI).
+- FR-C2: While Mic is ON and not VAD-idle, capture uses overlapping windows. Whisper `vad_filter` stays off. App VAD may idle the stream (see FR-C4).
+- FR-C3: Default format 16 kHz mono PCM via PyAudio (WASAPI). If PyAudio cannot open a device, fall back to `sounddevice`.
+- FR-C4: While Mic is ON, VAD may stop the streaming capture after `vad_silence_ms` of quiet and idle CUDA. A short probe wakes capture on speech. Mic OFF stops probe as well.
 
 ### 4.2 Transcription
 
@@ -57,8 +58,10 @@ Single local user on this PC.
 ### 4.4 Overlay
 
 - FR-U1: PyQt6 frameless, translucent, always-on-top tool window + system tray.
-- FR-U2: Shows partial hypothesis, last commit, and status `listening | uncertain | locked | off`.
+- FR-U2: Shows partial hypothesis, last commit, and status `listening | quiet | uncertain | locked | off`.
 - FR-U3: Enable switch is visible and reachable without focusing another app.
+- FR-U4: Only one process. A new launch (shortcut, tray Restart, or `pythonw`) stops the previous instance, then starts fresh.
+- FR-U5: HUD Settings: UI language, overlay opacity, Whisper model, Ollama model, VAD idle toggle. Persist under LOCALAPPDATA.
 
 ### 4.5 Cacophony
 
@@ -102,14 +105,12 @@ Single local user on this PC.
 | Layer | Library / tool |
 |---|---|
 | UI | PyQt6 |
-| Capture | PyAudio (WASAPI) |
+| Capture | PyAudio (WASAPI), `sounddevice` fallback |
 | ASR | faster-whisper (CTranslate2), CUDA 12 + cuDNN 9 |
 | LLM | ollama (Python client), localhost |
 | Hotkeys | pynput |
 | Arrays | numpy |
 | Language | Python 3.11 or 3.12 |
-
-Optional later: `sounddevice` as a WASAPI fallback if PyAudio device enumeration fails.
 
 ## 7. Acceptance criteria (v1)
 

@@ -10,6 +10,7 @@ import numpy as np
 
 from personalclipboard.asr.assembler import SentenceAssembler
 from personalclipboard.asr.commands import match_command
+from personalclipboard.asr.vad import QuietIdle
 from personalclipboard.asr.voice_gate import VoiceGate
 from personalclipboard.audio.capture import RingBuffer
 from personalclipboard.config import Settings
@@ -27,6 +28,7 @@ class AsrEngine:
         on_status: Callable[[str], None] | None = None,
         on_error: Callable[[str], None] | None = None,
         on_command: Callable[[str], None] | None = None,
+        on_vad_idle: Callable[[], None] | None = None,
     ) -> None:
         self._settings = settings
         self._ring = ring
@@ -35,6 +37,7 @@ class AsrEngine:
         self._on_status = on_status
         self._on_error = on_error
         self._on_command = on_command
+        self._on_vad_idle = on_vad_idle
         self._model = None
         self._load_error: str | None = None
         self._enabled = threading.Event()
@@ -42,6 +45,7 @@ class AsrEngine:
         self._thread: threading.Thread | None = None
         self._assembler = SentenceAssembler(min_chars=settings.min_commit_chars)
         self._gate = VoiceGate()
+        self._quiet = QuietIdle(settings.vad_silence_ms)
         self._last_command: str | None = None
         self._last_command_at = 0.0
         self._meeting_mode = False
@@ -82,6 +86,7 @@ class AsrEngine:
             self._assembler.set_pause_commit(enabled)
             self._assembler.reset()
             self._gate.reset()
+            self._quiet.reset()
             self._last_command = None
 
     def flush_remainder(self) -> str:
@@ -96,6 +101,8 @@ class AsrEngine:
             self._assembler.reset()
             self._last_command = None
             self._last_command_at = 0.0
+            self._quiet.reset()
+            self._quiet.silence_ms = self._settings.vad_silence_ms
         self._enabled.set()
         if self._thread is None or not self._thread.is_alive():
             self._thread = threading.Thread(target=self._loop, name="asr-worker", daemon=True)
@@ -107,6 +114,7 @@ class AsrEngine:
         with self._state_lock:
             self._assembler.reset()
             self._last_command = None
+            self._quiet.reset()
         self._gate.reset()
 
     def shutdown(self) -> None:
@@ -165,9 +173,16 @@ class AsrEngine:
     def _voice_ok(self, audio: np.ndarray) -> bool:
         verdict = self._gate.classify(audio, self._settings.sample_rate)
         if verdict == "silence":
+            if self._settings.vad_enabled and self._quiet.on_silence(self._settings.hop_ms):
+                if self._on_status:
+                    self._on_status("quiet")
+                if self._on_vad_idle:
+                    self._on_vad_idle()
+                return False
             if self._on_status:
                 self._on_status("locked" if self._gate.enrolled else "listening")
             return False
+        self._quiet.on_voice()
         if verdict == "reject_other":
             if self._on_status:
                 self._on_status("uncertain")

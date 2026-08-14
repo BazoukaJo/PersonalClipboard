@@ -14,17 +14,16 @@ Local, always-on Windows desktop app: microphone → CUDA Faster-Whisper → loc
 
 ## Capture semantics
 
-- Enable **ON**: always-on streaming Whisper (overlapping windows). Mic callback + CUDA ASR loop run continuously.
-- Enable **OFF**: stop WASAPI capture and idle/stop the GPU ASR worker. This is the privacy kill switch.
-- v1 does **not** VAD-gate capture. Silero/VAD may hint chunk boundaries and cacophony confidence only.
+- Enable **ON**: WASAPI (PyAudio, sounddevice fallback) + overlapping Whisper. After ~1.5 s of quiet, VAD **stops the streaming mic and idles CUDA**; a short probe wakes them on speech. **OFF** is the privacy kill switch (no probe).
 
 ## Architecture (do not violate)
 
 ```
-WASAPI mic → PyAudio callback → lock-free ring buffer
+WASAPI / sounddevice mic → callback → lock-free ring buffer
   → faster-whisper CUDA (large-v3-turbo, float16)
   → overlay partials
   → committed sentence → Ollama 127.0.0.1 → clipboard
+Quiet (VAD) → stop stream + idle ASR; probe bursts wake capture
 Ctrl+Shift+A → Ollama (dictation prompt) → clipboard
 Meeting Record → same ASR → desktop markdown (no clipboard)
 ```
@@ -71,6 +70,7 @@ tests/                   unit tests; no GPU required for stubs
 - **Do** reject low-confidence / overlapping speech instead of clobbering the clipboard.
 - **Don't** add network calls except `http://127.0.0.1:*` (Ollama).
 - **Don't** put Faster-Whisper or Ollama work on the Qt thread or the PortAudio callback.
+- **Don't** run two overlays. A new launch must replace the running process.
 - **Don't** treat Continue/VS Code as required; Cursor is the coding agent. Ollama in this repo is the **in-app** corrector.
 
 Full design: `docs/ARCHITECTURE.md`. Requirements: `docs/PRD.md`. Install: `docs/SETUP.md`.

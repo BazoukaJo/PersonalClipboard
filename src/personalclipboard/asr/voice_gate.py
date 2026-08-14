@@ -6,7 +6,7 @@ import numpy as np
 
 
 class VoiceGate:
-    """RMS + spectral-centroid lock. Capture stays always-on; this only skips ASR."""
+    """RMS + spectral-centroid lock. Skips other speakers; silence feeds VAD idle."""
 
     def __init__(self, min_rms: float = 0.018, centroid_tol: float = 0.4) -> None:
         self._min_rms = min_rms

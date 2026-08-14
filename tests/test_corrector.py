@@ -10,7 +10,7 @@ def test_corrector_rejects_non_localhost() -> None:
 
 
 def test_strip_markdown_fences() -> None:
-    raw = "```t3d\nBegin Object\nEnd Object\n```"
+    raw = "```text\nBegin Object\nEnd Object\n```"
     assert _strip_fences(raw) == "Begin Object\nEnd Object"
 
 

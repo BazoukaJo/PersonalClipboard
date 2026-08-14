@@ -30,6 +30,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from personalclipboard.config import shell_alpha
+from personalclipboard.ui.i18n import flash_key, t
+from personalclipboard.ui.settings_panel import SettingsPanel
 from personalclipboard.ui.win11_resize import (
     enable_thick_frame,
     resize_hit,
@@ -46,6 +49,7 @@ _STATUS_LABEL = {
     "uncertain": "Other voice",
     "locked": "Your voice",
     "recording": "Recording",
+    "quiet": "Quiet",
     "error": "Error",
 }
 
@@ -61,6 +65,7 @@ _STATUS_STYLE = {
     "uncertain": _pill("#b4b4b8", "rgba(36,36,38,100)", "rgba(100,100,104,70)"),
     "locked": _pill("#f4f4f6", "rgba(52,52,56,115)", "rgba(160,160,164,90)"),
     "recording": _pill("#f4f4f6", "rgba(58,58,62,120)", "rgba(170,170,174,95)"),
+    "quiet": _pill("#b4b4b8", "rgba(28,28,30,95)", "rgba(90,90,94,60)"),
     "error": _pill("#c8c8cc", "rgba(26,26,28,105)", "rgba(100,100,104,75)"),
 }
 
@@ -80,12 +85,16 @@ class Overlay(QWidget):
         self._elide: dict[QLabel, tuple[str, bool]] = {}
         self._meeting_on = False
         self._status_key = "off"
-        self._enable = QCheckBox("Mic")
-        self._status = QLabel("Mic off")
+        self._enable = QCheckBox("Mic", self)
+        self._status = QLabel("Mic off", self)
         self._flash_timer = QTimer(self)
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._restore_status)
-        self._copy_btn = QPushButton("Copy")
+        self._copy_btn = QPushButton("Copy", self)
+        self._hide_btn = QPushButton("Hide", self)
+        self._lang = "en"
+        self._opacity = 35
+        self._empty = t("en", "empty")
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
@@ -99,22 +108,35 @@ class Overlay(QWidget):
 
     def _build(self) -> None:
         top = self._make_top()
-        audio, self._audio_live, self._audio_body = _result_panel("Voice", live_tag="Hearing")
+        audio, self._audio_live, self._audio_body, self._voice_title, self._hear_tag = (
+            _result_panel("Voice", live_tag="Hearing", parent=self)
+        )
         self._audio_frame = audio
         audio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        self._input = QLineEdit()
+        self._input = QLineEdit(self)
         self._input.setPlaceholderText("Type, then Enter or a period.")
         self._input.textChanged.connect(self._on_typed)
         self._input.returnPressed.connect(self._commit_typed_enter)
-        typed, _, self._typed_body = _result_panel("Type", extra=self._input)
+        typed, _, self._typed_body, self._type_title, _tag = _result_panel(
+            "Type", extra=self._input, parent=self
+        )
+        _tag.hide()
         self._typed_frame = typed
         typed.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        meeting, self._meet_btn, self._meet_live, self._meet_notes, self._meet_live_row = (
-            _meeting_panel()
-        )
+        pack = _meeting_panel(self)
+        meeting = pack[0]
+        self._meet_btn = pack[1]
+        self._meet_live = pack[2]
+        self._meet_notes = pack[3]
+        self._meet_live_row = pack[4]
+        self._meet_title = pack[5]
+        self._meet_tag = pack[6]
         self._meet_frame = meeting
         meeting.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._meet_btn.clicked.connect(self._toggle_meeting)
+        self.settings = SettingsPanel(self)
+        self.settings.language_changed.connect(self.apply_language)
+        self.settings.opacity_changed.connect(self.set_opacity)
         root = QVBoxLayout(self)
         self._root = root
         root.setContentsMargins(16, 16, 16, 14)
@@ -123,6 +145,7 @@ class Overlay(QWidget):
         root.addWidget(audio)
         root.addWidget(typed)
         root.addWidget(meeting, 0)
+        root.addWidget(self.settings, 0)
         self._apply_chrome()
         self.show_partial("")
         self.show_audio_phrase("")
@@ -136,7 +159,7 @@ class Overlay(QWidget):
         self._copy_btn.setObjectName("ghost")
         self._copy_btn.setToolTip("Copy the last finished sentence again")
         self._copy_btn.clicked.connect(self.copy_requested.emit)
-        hide = QPushButton("Hide")
+        hide = self._hide_btn
         hide.setObjectName("ghost")
         hide.setToolTip("Hide this window. Click the tray icon to show it.")
         hide.clicked.connect(self.hide_requested.emit)
@@ -169,7 +192,7 @@ class Overlay(QWidget):
                 border: 1px solid rgba(160, 160, 164, 90);
                 border-left: 3px solid {_ACCENT};
             }}
-            QCheckBox, QPushButton#ghost, QLineEdit, QPlainTextEdit {{
+            QCheckBox, QPushButton#ghost, QLineEdit, QPlainTextEdit, QComboBox {{
                 background: rgba(14, 14, 16, 88);
                 color: #ececee;
                 border: 1px solid rgba(90, 90, 94, 70);
@@ -184,9 +207,18 @@ class Overlay(QWidget):
             }}
             QCheckBox::indicator:checked {{ background: {_ACCENT}; }}
             QPushButton#ghost {{ font-size: 12px; min-width: 56px; }}
-            QPushButton#ghost:hover, QCheckBox:hover, QLineEdit:focus, QPlainTextEdit:focus {{
+            QPushButton#ghost:hover, QCheckBox:hover, QLineEdit:focus,
+            QPlainTextEdit:focus, QComboBox:hover {{
                 border-color: {_ACCENT};
                 background: rgba(36, 36, 40, 110);
+            }}
+            QComboBox {{ font-size: 12px; min-height: 24px; padding: 4px 8px; }}
+            QSlider::groove:horizontal {{
+                height: 4px; background: rgba(80,80,84,90); border-radius: 2px;
+            }}
+            QSlider::handle:horizontal {{
+                width: 12px; height: 12px; margin: -4px 0; border-radius: 6px;
+                background: {_ACCENT};
             }}
             QLineEdit, QPlainTextEdit {{
                 font-size: 14px; min-height: 28px; padding: 8px 12px;
@@ -202,19 +234,23 @@ class Overlay(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         shell = self.rect().adjusted(1, 1, -1, -1)
-        painter.setBrush(QColor(14, 14, 16, 88))
+        painter.setBrush(QColor(14, 14, 16, shell_alpha(self._opacity)))
         painter.setPen(QPen(QColor(70, 70, 74, 80), 1))
         painter.drawRoundedRect(shell, 16, 16)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(200, 200, 204, 70))
         handle = QRect(self.width() // 2 - 18, 8, 36, 4)
         painter.drawRoundedRect(handle, 2, 2)
+        painter.end()
         super().paintEvent(a0)
 
     def showEvent(self, a0: QShowEvent | None) -> None:
         super().showEvent(a0)
         if sys.platform == "win32":
-            enable_thick_frame(int(self.winId()))
+            try:
+                enable_thick_frame(int(self.winId()))
+            except Exception:
+                pass
 
     def changeEvent(self, a0: QEvent | None) -> None:
         super().changeEvent(a0)
@@ -223,11 +259,17 @@ class Overlay(QWidget):
             self.clamp_to_screen()
 
     def nativeEvent(self, eventType, message):  # type: ignore[override]
-        if sys.platform == "win32" and _is_win_generic_msg(eventType):
-            hit = self._nchittest_from_message(int(message))
-            if hit is not None:
-                return True, hit
-        return super().nativeEvent(eventType, message)
+        """Hit-test resize borders. Always return (bool, int); super() crashes Qt on Win11."""
+        try:
+            if sys.platform == "win32" and _is_win_generic_msg(eventType):
+                addr = int(message)
+                if addr > 0xFFFF:
+                    hit = self._nchittest_from_message(addr)
+                    if hit is not None:
+                        return True, hit
+        except Exception:
+            pass
+        return False, 0
 
     def clamp_to_screen(self) -> None:
         screen = self.screen()
@@ -265,14 +307,14 @@ class Overlay(QWidget):
 
     def show_audio_phrase(self, text: str) -> None:
         stripped = text.strip()
-        _set_body(self._audio_body, stripped)
+        _set_body(self._audio_body, stripped, self._empty)
         if stripped and not self._meeting_on:
             _set_active(self._audio_frame, True)
             _set_active(self._typed_frame, False)
 
     def show_typed_phrase(self, text: str) -> None:
         stripped = text.strip()
-        _set_body(self._typed_body, stripped)
+        _set_body(self._typed_body, stripped, self._empty)
         if stripped and not self._meeting_on:
             _set_active(self._typed_frame, True)
             _set_active(self._audio_frame, False)
@@ -299,7 +341,9 @@ class Overlay(QWidget):
     def set_message(self, text: str) -> None:
         if not text.strip():
             return
-        self._status.setText(flash_label(text))
+        label = flash_label(text)
+        key = flash_key(label)
+        self._status.setText(t(self._lang, key) if key else label)
         self._status.setStyleSheet(_flash_chrome(text))
         self._flash_timer.start(2200)
 
@@ -312,12 +356,48 @@ class Overlay(QWidget):
         self._enable.setEnabled(enabled)
         self._meet_btn.setEnabled(enabled)
 
+    def apply_language(self, lang: str) -> None:
+        self._lang = lang if lang in ("en", "fr", "es", "de") else "en"
+        self._empty = t(self._lang, "empty")
+        self._relabel()
+        self.settings.retranslate(self._lang)
+        blanks = {t(code, "empty") for code in ("en", "fr", "es", "de")}
+        if self._audio_body.text() in blanks:
+            _set_body(self._audio_body, "", self._empty)
+        if self._typed_body.text() in blanks:
+            _set_body(self._typed_body, "", self._empty)
+        if not self._flash_timer.isActive():
+            self._paint_status(self._status_key)
+
+    def _relabel(self) -> None:
+        lang = self._lang
+        self._enable.setText(t(lang, "mic"))
+        self._enable.setToolTip(t(lang, "mic_tip"))
+        self._copy_btn.setText(t(lang, "copy"))
+        copy_key = "copy_meet_tip" if self._meeting_on else "copy_tip"
+        self._copy_btn.setToolTip(t(lang, copy_key))
+        self._hide_btn.setText(t(lang, "hide"))
+        self._hide_btn.setToolTip(t(lang, "hide_tip"))
+        self._voice_title.setText(t(lang, "voice"))
+        self._hear_tag.setText(t(lang, "hearing"))
+        self._type_title.setText(t(lang, "type"))
+        self._input.setPlaceholderText(t(lang, "type_hint"))
+        self._meet_title.setText(t(lang, "meeting"))
+        self._meet_tag.setText(t(lang, "live"))
+        self._meet_btn.setText(t(lang, "stop_save" if self._meeting_on else "record"))
+        self._meet_btn.setToolTip(t(lang, "meet_tip"))
+        self._meet_notes.setPlaceholderText(t(lang, "meet_hint"))
+
+    def set_opacity(self, percent: int) -> None:
+        self._opacity = max(15, min(80, percent))
+        self.update()
+
     def _toggle_meeting(self) -> None:
         self.meeting_toggled.emit(not self._meeting_on)
 
     def set_meeting_recording(self, active: bool, _path: str = "") -> None:
         self._meeting_on = active
-        self._meet_btn.setText("Stop & save" if active else "Record")
+        self._meet_btn.setText(t(self._lang, "stop_save" if active else "record"))
         self._meet_live_row.setVisible(active)
         self._meet_notes.setVisible(active)
         policy = QSizePolicy.Policy.Expanding if active else QSizePolicy.Policy.Maximum
@@ -327,11 +407,11 @@ class Overlay(QWidget):
         self._audio_frame.setEnabled(not active)
         self._copy_btn.setEnabled(not active)
         if active:
-            self._copy_btn.setToolTip("Speech is saving to meeting notes, not the clipboard.")
+            self._copy_btn.setToolTip(t(self._lang, "copy_meet_tip"))
             self._set_elided(self._meet_live, "…", live=True)
             self._meet_notes.setPlainText("")
         else:
-            self._copy_btn.setToolTip("Copy the last finished sentence again")
+            self._copy_btn.setToolTip(t(self._lang, "copy_tip"))
 
     def show_meeting_partial(self, text: str) -> None:
         self._set_elided(self._meet_live, live_preview(text), live=True)
@@ -341,7 +421,9 @@ class Overlay(QWidget):
         self._meet_notes.moveCursor(QTextCursor.MoveOperation.End)
 
     def _paint_status(self, status: str) -> None:
-        self._status.setText(_STATUS_LABEL.get(status, status))
+        self._status.setText(t(self._lang, f"status_{status}"))
+        if self._status.text() == f"status_{status}":
+            self._status.setText(_STATUS_LABEL.get(status, status))
         self._status.setStyleSheet(_status_chrome(status))
 
     def _restore_status(self) -> None:
@@ -509,9 +591,9 @@ def _set_active(frame: QFrame, active: bool) -> None:
         style.polish(frame)
 
 
-def _set_body(label: QLabel, text: str) -> None:
+def _set_body(label: QLabel, text: str, empty: str = _EMPTY) -> None:
     filled = bool(text.strip())
-    label.setText(text.strip() if filled else _EMPTY)
+    label.setText(text.strip() if filled else empty)
     color = "#f2f2f4" if filled else "#7a7a80"
     label.setStyleSheet(
         f"color:{color}; font-size:15px; padding:10px 12px; background:rgba(12,12,14,70);"
@@ -520,9 +602,13 @@ def _set_body(label: QLabel, text: str) -> None:
 
 
 def _result_panel(
-    title: str, *, live_tag: str | None = None, extra: QWidget | None = None
-) -> tuple[QFrame, QLabel, QLabel]:
-    frame = QFrame()
+    title: str,
+    *,
+    live_tag: str | None = None,
+    extra: QWidget | None = None,
+    parent: QWidget | None = None,
+) -> tuple[QFrame, QLabel, QLabel, QLabel, QLabel]:
+    frame = QFrame(parent)
     frame.setObjectName("panel")
     frame.setProperty("active", "false")
     header = QLabel(title)
@@ -539,20 +625,25 @@ def _result_panel(
     layout.addWidget(header)
     live: QLabel
     if live_tag is not None:
-        live_row, live = _tagged_line(live_tag, "#b8b8bc")
+        live_row, live, tag = _tagged_line(live_tag, "#b8b8bc")
         layout.addWidget(live_row)
     else:
         live = QLabel("…")
         live.hide()
         live.setParent(frame)
+        tag = QLabel("")
+        tag.hide()
+        tag.setParent(frame)
     if extra is not None:
         layout.addWidget(extra)
     layout.addWidget(body)
-    return frame, live, body
+    return frame, live, body, header, tag
 
 
-def _meeting_panel() -> tuple[QFrame, QPushButton, QLabel, QPlainTextEdit, QWidget]:
-    frame = QFrame()
+def _meeting_panel(
+    parent: QWidget | None = None,
+) -> tuple[QFrame, QPushButton, QLabel, QPlainTextEdit, QWidget, QLabel, QLabel]:
+    frame = QFrame(parent)
     frame.setObjectName("panel")
     frame.setProperty("active", "false")
     header = QLabel("Meeting")
@@ -569,7 +660,7 @@ def _meeting_panel() -> tuple[QFrame, QPushButton, QLabel, QPlainTextEdit, QWidg
     top.addWidget(header)
     top.addStretch(1)
     top.addWidget(button)
-    live_row, live = _tagged_line("Live", "#b8b8bc")
+    live_row, live, tag = _tagged_line("Live", "#b8b8bc")
     live_row.setVisible(False)
     notes = QPlainTextEdit()
     notes.setReadOnly(True)
@@ -584,10 +675,10 @@ def _meeting_panel() -> tuple[QFrame, QPushButton, QLabel, QPlainTextEdit, QWidg
     layout.addLayout(top)
     layout.addWidget(live_row)
     layout.addWidget(notes)
-    return frame, button, live, notes, live_row
+    return frame, button, live, notes, live_row, header, tag
 
 
-def _tagged_line(tag: str, color: str) -> tuple[QWidget, QLabel]:
+def _tagged_line(tag: str, color: str) -> tuple[QWidget, QLabel, QLabel]:
     row = QWidget()
     tag_lab = QLabel(tag)
     tag_lab.setFixedWidth(62)
@@ -609,4 +700,4 @@ def _tagged_line(tag: str, color: str) -> tuple[QWidget, QLabel]:
     layout.setSpacing(10)
     layout.addWidget(tag_lab)
     layout.addWidget(line, 1)
-    return row, line
+    return row, line, tag_lab

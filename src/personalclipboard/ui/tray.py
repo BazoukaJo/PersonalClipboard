@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
@@ -27,6 +28,7 @@ def about_body() -> str:
         "Microphone audio, transcripts, and clipboard text stay on this machine.\n"
         "Correction runs on Ollama at 127.0.0.1 only.\n\n"
         "Finish a spoken or typed phrase with a period to correct and copy.\n"
+        "In Type, Tab accepts the grey suggestion while that field is focused.\n"
         "Say paste last, copy last, or correct last.\n"
         "Ctrl+Shift+A reformats the current clipboard.\n"
         "Record meeting transcribes the room and saves notes on the desktop.\n"
@@ -35,7 +37,30 @@ def about_body() -> str:
     )
 
 
+def repo_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+def packaged_exe() -> Path | None:
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable).resolve()
+        return exe if exe.is_file() else None
+    candidates = (
+        repo_root() / "dist" / "PersonalClipboard" / "PersonalClipboard.exe",
+        repo_root() / "PersonalClipboard.exe",
+    )
+    for path in candidates:
+        if path.is_file():
+            return path
+    return None
+
+
 def restart_command() -> list[str]:
+    exe = packaged_exe()
+    if exe is not None:
+        return [str(exe)]
     return [_pythonw_or_current(), "-m", "personalclipboard"]
 
 
@@ -43,9 +68,11 @@ def spawn_new_instance() -> None:
     flags = 0
     if sys.platform == "win32":
         flags = _DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP
+    cmd = restart_command()
+    work = str(Path(cmd[0]).resolve().parent) if cmd[0].lower().endswith(".exe") else os.getcwd()
     subprocess.Popen(  # pylint: disable=consider-using-with
-        restart_command(),
-        cwd=os.getcwd(),
+        cmd,
+        cwd=work,
         creationflags=flags,
         close_fds=True,
     )

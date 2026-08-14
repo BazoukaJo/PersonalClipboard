@@ -18,3 +18,4 @@ class UiBridge(QObject):
     vad_idle = pyqtSignal()
     vad_wake = pyqtSignal()
     ollama_models = pyqtSignal(object)
+    predicted = pyqtSignal(str, str)

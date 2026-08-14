@@ -30,6 +30,7 @@ _PERSIST = (
     "ollama_model",
     "vad_enabled",
     "vad_silence_ms",
+    "predict_enabled",
 )
 
 
@@ -62,6 +63,8 @@ class Settings:
     overlay_opacity: int = 35
     vad_enabled: bool = True
     vad_silence_ms: int = 1500
+    predict_enabled: bool = True
+    predict_timeout_s: float = 3.0
 
 
 def default_settings() -> Settings:
@@ -87,6 +90,8 @@ def load_settings(path: Path | None = None) -> Settings:
         settings.ui_language = "en"
     if not isinstance(settings.vad_enabled, bool):
         settings.vad_enabled = bool(settings.vad_enabled)
+    if not isinstance(settings.predict_enabled, bool):
+        settings.predict_enabled = bool(settings.predict_enabled)
     if not isinstance(settings.whisper_model, str) or not settings.whisper_model.strip():
         settings.whisper_model = "large-v3-turbo"
     if not isinstance(settings.ollama_model, str) or not settings.ollama_model.strip():

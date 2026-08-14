@@ -9,7 +9,8 @@ from typing import Any, Mapping
 from urllib.parse import urlparse
 
 from personalclipboard.config import Settings
-from personalclipboard.modes import system_prompt
+from personalclipboard.llm.complete import continuation_suffix
+from personalclipboard.modes import complete_prompt, system_prompt
 
 
 class Corrector:
@@ -45,6 +46,30 @@ class Corrector:
             return out or stripped
         except Exception:
             return stripped
+
+    def complete(self, prefix: str) -> str:
+        """Return a short continuation for the Type field. Empty if unused."""
+        stripped = prefix.strip()
+        if len(stripped) < 4:
+            return ""
+        try:
+            payload = _post_chat(
+                self._chat_url,
+                timeout=self._settings.predict_timeout_s,
+                body={
+                    "model": self._settings.ollama_model,
+                    "stream": False,
+                    "messages": [
+                        {"role": "system", "content": complete_prompt()},
+                        {"role": "user", "content": prefix},
+                    ],
+                    "options": {"temperature": 0.2, "num_predict": 32},
+                },
+            )
+            out = _strip_fences(_assistant_text(payload))
+            return continuation_suffix(prefix, out)
+        except Exception:
+            return ""
 
     def list_models(self) -> list[str]:
         names = {self._settings.ollama_model}

@@ -50,6 +50,7 @@ def test_settings_panel_emits_language_opacity_vad(qapp) -> None:
         ollama="qwen2.5-coder:1.5b",
         ollama_models=[],
         vad=True,
+        predict=True,
     )
     assert langs == ["fr"]
     panel.deleteLater()

@@ -24,6 +24,7 @@ def test_ollama_is_localhost() -> None:
     assert s.ollama_model == "qwen2.5-coder:1.5b"
     assert s.hotkey == "<ctrl>+<shift>+a"
     assert s.vad_enabled is True
+    assert s.predict_enabled is True
     assert 15 <= s.overlay_opacity <= 80
 
 

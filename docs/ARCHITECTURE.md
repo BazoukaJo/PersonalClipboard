@@ -14,6 +14,7 @@ Mic (WASAPI via PyAudio, sounddevice fallback)
        → partial hypothesis → Qt overlay
        → committed sentence → LLM worker (Ollama 127.0.0.1)
             → QClipboard
+Type field (focused only) → debounce → LLM worker complete → grey ghost; Tab inserts
 Quiet (app VAD, Mic ON) → stop stream + idle CUDA; short probe wakes on speech
 Enable switch OFF → stop stream, stop probe, idle ASR (no wake)
 Ctrl+Shift+A → LLM worker (dictation prompt) → QClipboard
@@ -25,7 +26,7 @@ Ctrl+Shift+A → LLM worker (dictation prompt) → QClipboard
 |---|---|---|---|
 | PortAudio callback | realtime | Copy PCM into ring buffer; return immediately | Locks, GPU, Qt, alloc-heavy Python |
 | ASR worker | P-core + CUDA | Window slice, Faster-Whisper, confidence gates | Qt widgets, Ollama HTTP |
-| LLM worker | P-core (HTTP) | Localhost generate; timeout/skip stale jobs | Audio callback, CUDA Whisper |
+| LLM worker | P-core (HTTP) | Localhost generate; timeout/skip stale jobs | Audio callback, CUDA Whisper, Qt widgets |
 | Qt main | UI | Overlay, tray, enable switch, clipboard write | Whisper, Ollama, blocking I/O |
 
 Use `queue.Queue` or equivalent between ASR → Qt (partials/commits) and ASR → LLM (commits only). Clipboard writes happen on the Qt thread via signals/slots.
@@ -103,6 +104,7 @@ No pyannote on the hot path.
 ## 8. Clipboard and hotkey
 
 - Ambient: commit → (optional) Ollama → `QClipboard.setText`.
+- Type field: while focused, debounce → same Ollama model as a **continuation** (not a rewrite). Grey ghost; Tab inserts. Escape clears. Never on ASR partials or Meeting Record.
 - `Ctrl+Shift+A`: read clipboard → Ollama with the dictation system prompt → write back. Independent of enable.
 - Register the hotkey with `pynput` (global). `QShortcut` only works when the overlay is focused.
 - One process only. A new launch asks the running instance to quit (CUDA unload), then binds the instance socket. If the old process hangs, it is terminated.
@@ -116,20 +118,24 @@ Meeting Record uses the same ASR worker with VoiceGate lock off and voice comman
 | Module | Responsibility |
 |---|---|
 | `app.py` | `QApplication`, tray, start/stop workers |
-| `config.py` | Models, hop, hotkey, Ollama host, HUD language/opacity/VAD (LOCALAPPDATA) |
+| `config.py` | Models, hop, hotkey, Ollama host, HUD language/opacity/VAD/predict (LOCALAPPDATA) |
 | `audio/capture.py` | PyAudio WASAPI → ring; `sounddevice` fallback |
 | `audio/probe.py` | Short peeks to wake capture after VAD idle |
 | `asr/engine.py` | CUDA Faster-Whisper worker |
 | `asr/vad.py` | Silence timer (`QuietIdle`) |
-| `llm/corrector.py` | Localhost Ollama + `/api/tags` |
+| `llm/corrector.py` | Localhost Ollama + `/api/tags` + Type continuation |
+| `llm/complete.py` | Ghost suffix gating (Type field only) |
 | `clipboard/service.py` | Qt clipboard read/write |
 | `ui/overlay.py` | Translucent HUD + status |
-| `ui/settings_panel.py` | Language, opacity, models, VAD toggle |
+| `ui/predict_edit.py` | Type field ghost + Tab accept |
+| `ui/settings_panel.py` | Language, opacity, models, VAD, type-ahead toggle |
 | `ui/i18n.py` | en / fr / es / de HUD strings |
 | `hotkeys/bindings.py` | `Ctrl+Shift+A` |
 | `modes/ambient.py` | Prose correction prompt |
+| `modes/complete.py` | Type-ahead continuation prompt |
 | `notes/meeting.py` | Desktop markdown meeting notes |
 | `ui/win11_resize.py` | Frameless Win11 resize hit-test |
+| `ui/tray.py` | Tray, About, restart (prefers `dist/.../PersonalClipboard.exe`) |
 
 ## 11. Failure modes
 

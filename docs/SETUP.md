@@ -65,7 +65,7 @@ Use `python -m personalclipboard` for a console. After Whisper loads, Mic turns 
 
 Preferred WASAPI input: a device whose name contains `maono` when present (`config.py` `preferred_input`).
 
-A desktop shortcut is a local Windows `.lnk` only. Do not add it to the repo. Point it at `.venv\Scripts\pythonw.exe`, arguments `-m personalclipboard`, working directory the clone.
+A desktop shortcut is a local Windows `.lnk` only. Do not add it to the repo. After `.\scripts\build_exe.ps1`, point it at `dist\PersonalClipboard\PersonalClipboard.exe` with working directory that folder (`python scripts\write_shortcut.py`). Until the exe exists, `pythonw -m personalclipboard` is still valid.
 
 ## 6. Ready when
 
@@ -74,4 +74,5 @@ A desktop shortcut is a local Windows `.lnk` only. Do not add it to the repo. Po
 - [ ] WhisperModel loads on `cuda` / `float16`
 - [ ] `ollama run qwen2.5-coder:1.5b` works on `127.0.0.1`
 - [ ] Overlay appears; tray icon has Show / Stop / Restart / About
+- [ ] Desktop shortcut launches `PersonalClipboard.exe` when `dist\` exists
 - [ ] No cloud API keys in the repo

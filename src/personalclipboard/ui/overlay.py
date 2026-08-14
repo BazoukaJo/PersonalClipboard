@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QSizePolicy,
@@ -32,6 +31,7 @@ from PyQt6.QtWidgets import (
 
 from personalclipboard.config import shell_alpha
 from personalclipboard.ui.i18n import flash_key, t
+from personalclipboard.ui.predict_edit import PredictLineEdit
 from personalclipboard.ui.settings_panel import SettingsPanel
 from personalclipboard.ui.win11_resize import (
     enable_thick_frame,
@@ -76,6 +76,7 @@ class Overlay(QWidget):
     copy_requested = pyqtSignal()
     phrase_completed = pyqtSignal(str)
     meeting_toggled = pyqtSignal(bool)
+    prediction_requested = pyqtSignal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -84,6 +85,7 @@ class Overlay(QWidget):
         self._typed_prev = ""
         self._elide: dict[QLabel, tuple[str, bool]] = {}
         self._meeting_on = False
+        self._predict_want = True
         self._status_key = "off"
         self._enable = QCheckBox("Mic", self)
         self._status = QLabel("Mic off", self)
@@ -113,10 +115,11 @@ class Overlay(QWidget):
         )
         self._audio_frame = audio
         audio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        self._input = QLineEdit(self)
+        self._input = PredictLineEdit(self)
         self._input.setPlaceholderText("Type, then Enter or a period.")
         self._input.textChanged.connect(self._on_typed)
         self._input.returnPressed.connect(self._commit_typed_enter)
+        self._input.prediction_requested.connect(self.prediction_requested.emit)
         typed, _, self._typed_body, self._type_title, _tag = _result_panel(
             "Type", extra=self._input, parent=self
         )
@@ -321,12 +324,30 @@ class Overlay(QWidget):
 
     def set_typed(self, text: str) -> None:
         self._updating_input = True
+        self._input.set_blocked(True)
         self._input.setText(text)
         self._typed_prev = text
+        self._input.set_blocked(False)
         self._updating_input = False
 
     def typed_text(self) -> str:
         return self._input.text()
+
+    def type_field_active(self) -> bool:
+        return self._input.hasFocus() and self._input.isEnabled() and not self._meeting_on
+
+    def focusNextPrevChild(self, next: bool) -> bool:  # pylint: disable=redefined-builtin
+        if next and self._input.hasFocus() and self._input.isEnabled():
+            return False
+        return super().focusNextPrevChild(next)
+
+    def show_prediction(self, prefix: str, suffix: str) -> None:
+        if self.type_field_active():
+            self._input.set_ghost(prefix, suffix)
+
+    def set_predict_enabled(self, enabled: bool) -> None:
+        self._predict_want = enabled
+        self._input.set_predict_enabled(enabled and not self._meeting_on)
 
     def apply_typed_correction(self, original: str, corrected: str) -> None:
         current = self._input.text().strip()
@@ -382,6 +403,7 @@ class Overlay(QWidget):
         self._hear_tag.setText(t(lang, "hearing"))
         self._type_title.setText(t(lang, "type"))
         self._input.setPlaceholderText(t(lang, "type_hint"))
+        self._input.setToolTip(t(lang, "predict_tip"))
         self._meet_title.setText(t(lang, "meeting"))
         self._meet_tag.setText(t(lang, "live"))
         self._meet_btn.setText(t(lang, "stop_save" if self._meeting_on else "record"))
@@ -406,6 +428,7 @@ class Overlay(QWidget):
         _set_active(self._meet_frame, active)
         self._audio_frame.setEnabled(not active)
         self._copy_btn.setEnabled(not active)
+        self._input.set_predict_enabled(self._predict_want and not active)
         if active:
             self._copy_btn.setToolTip(t(self._lang, "copy_meet_tip"))
             self._set_elided(self._meet_live, "…", live=True)
@@ -443,6 +466,7 @@ class Overlay(QWidget):
         if self._updating_input:
             return
         if just_ended:
+            self._input.clear_ghost()
             phrase = text.strip()
             if _has_words(phrase):
                 self.phrase_completed.emit(phrase)

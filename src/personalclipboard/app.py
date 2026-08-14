@@ -58,7 +58,11 @@ class PersonalClipboardApp(QObject):
             on_vad_idle=self._bridge.vad_idle.emit,
         )
         self._corrector = Corrector(settings)
-        self._llm = LlmWorker(self._corrector, lambda _jid, text: self._bridge.corrected.emit(text))
+        self._llm = LlmWorker(
+            self._corrector,
+            self._emit_corrected,
+            self._emit_predicted,
+        )
         self._overlay = Overlay()
         clipboard = qt.clipboard()
         if clipboard is None:
@@ -92,6 +96,7 @@ class PersonalClipboardApp(QObject):
     def _prepare_overlay(self, qt: QApplication) -> None:
         self._overlay.apply_language(self._settings.ui_language)
         self._overlay.set_opacity(self._settings.overlay_opacity)
+        self._overlay.set_predict_enabled(self._settings.predict_enabled)
         self._connect_signals()
         self._overlay.set_listen_enabled(False)
         self._overlay.set_status("loading")
@@ -121,10 +126,12 @@ class PersonalClipboardApp(QObject):
         _queue(self._bridge.vad_idle, self._enter_vad_idle, queued)
         _queue(self._bridge.vad_wake, self._leave_vad_idle, queued)
         _queue(self._bridge.ollama_models, self._fill_settings, queued)
+        _queue(self._bridge.predicted, self._on_predicted, queued)
         self._overlay.enable_toggled.connect(self._set_capture)
         self._overlay.hide_requested.connect(self._overlay.hide)
         self._overlay.copy_requested.connect(self._copy_ready)
         self._overlay.phrase_completed.connect(self._on_typed_commit)
+        self._overlay.prediction_requested.connect(self._on_prediction_requested)
         self._overlay.meeting_toggled.connect(self._on_meeting_toggled)
         panel = self._overlay.settings
         panel.language_changed.connect(self._on_language_changed)
@@ -132,6 +139,13 @@ class PersonalClipboardApp(QObject):
         panel.whisper_changed.connect(self._on_whisper_changed)
         panel.ollama_changed.connect(self._on_ollama_changed)
         panel.vad_changed.connect(self._on_vad_changed)
+        panel.predict_changed.connect(self._on_predict_changed)
+
+    def _emit_corrected(self, _jid: int, text: str) -> None:
+        self._bridge.corrected.emit(text)
+
+    def _emit_predicted(self, prefix: str, suffix: str) -> None:
+        self._bridge.predicted.emit(prefix, suffix)
 
     def _init_tray(self, qt: QApplication) -> None:
         icon = make_tray_icon()
@@ -486,6 +500,23 @@ class PersonalClipboardApp(QObject):
         if not enabled and self._vad_sleeping:
             self._leave_vad_idle()
 
+    def _on_predict_changed(self, enabled: bool) -> None:
+        if self._booting:
+            return
+        self._settings.predict_enabled = enabled
+        save_settings(self._settings)
+        self._overlay.set_predict_enabled(enabled)
+
+    def _on_prediction_requested(self, prefix: str) -> None:
+        if not self._settings.predict_enabled or not self._overlay.type_field_active():
+            return
+        self._llm.submit_complete(prefix)
+
+    def _on_predicted(self, prefix: str, suffix: str) -> None:
+        if self._stopped or not suffix:
+            return
+        self._overlay.show_prediction(prefix, suffix)
+
     def _load_ollama_models(self) -> None:
         self._bridge.ollama_models.emit(self._corrector.list_models())
 
@@ -498,6 +529,7 @@ class PersonalClipboardApp(QObject):
             ollama=self._settings.ollama_model,
             ollama_models=names,
             vad=self._settings.vad_enabled,
+            predict=self._settings.predict_enabled,
         )
 
     def shutdown(self) -> None:

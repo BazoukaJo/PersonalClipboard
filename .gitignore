@@ -26,3 +26,4 @@ Thumbs.db
 .python-version
 *.orig
 *.lnk
+packaging/app.ico

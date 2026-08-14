@@ -23,6 +23,7 @@ WASAPI / sounddevice mic → callback → lock-free ring buffer
   → faster-whisper CUDA (large-v3-turbo, float16)
   → overlay partials
   → committed sentence → Ollama 127.0.0.1 → clipboard
+Type field (focused) → Ollama continuation → Tab accepts
 Quiet (VAD) → stop stream + idle ASR; probe bursts wake capture
 Ctrl+Shift+A → Ollama (dictation prompt) → clipboard
 Meeting Record → same ASR → desktop markdown (no clipboard)
@@ -31,7 +32,7 @@ Meeting Record → same ASR → desktop markdown (no clipboard)
 - Audio callback: copy samples only. No locks, no GPU, no Qt.
 - Qt main thread: overlay, tray, enable switch, `QClipboard` writes.
 - ASR worker: CUDA. LLM worker: HTTP to localhost Ollama.
-- **Never** send partial hypotheses to Ollama. Correct on commit or hotkey only.
+- **Never** send partial ASR hypotheses to Ollama. Correct on commit or hotkey only. Type-field ghost completion may call the same localhost model **only** while the Type field is focused (Tab accepts).
 - `condition_on_previous_text=False` on streaming windows.
 
 Defaults: Whisper `large-v3-turbo` / `turbo`, `device="cuda"`, `compute_type="float16"`, `beam_size=1` partials / `3` commit. Correction model: `qwen2.5-coder:1.5b` (~1 GB) so other GPU apps can share VRAM. Do not default to 14B+.
@@ -50,7 +51,7 @@ Latency targets: overlay partials **< ~400 ms**; clipboard commit **< ~1 s** aft
 | Mode | Trigger | Output |
 |---|---|---|
 | Dictation | Mic ON, sentence ending in `.` `?` `!` | Corrected prose → clipboard |
-| Type | Enter or `.` `?` `!` in the Type field | Same as dictation |
+| Type | Enter or `.` `?` `!` in the Type field | Same as dictation. Tab accepts a grey suggestion while that field is focused. |
 | Reformat | `Ctrl+Shift+A` or say correct last | Rewrite of current clipboard |
 | Meeting | Record | Transcript → `Desktop/Meeting YYYY-MM-DD HHMM.md` |
 
@@ -60,7 +61,9 @@ Latency targets: overlay partials **< ~400 ms**; clipboard commit **< ~1 s** aft
 src/personalclipboard/   app, config, audio, asr, llm, clipboard, ui, hotkeys, modes, notes
   hotkeys/bindings.py    global Ctrl+Shift+A (not global.py — keyword)
 docs/                    PRD, ARCHITECTURE, SETUP, images/overlay.png
+packaging/               PyInstaller spec + frozen entry
 scripts/capture_overlay.py
+scripts/build_exe.ps1    Windows onedir exe + desktop shortcut
 tests/                   unit tests; no GPU required for stubs
 ```
 

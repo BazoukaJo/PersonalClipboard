@@ -25,6 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pylint"]
+pack = ["pyinstaller"]
 
 [project.scripts]
 personalclipboard = "personalclipboard.app:main"
@@ -50,7 +51,7 @@ max-attributes = 40
 max-args = 8
 max-positional-arguments = 8
 min-public-methods = 0
-max-public-methods = 32
+max-public-methods = 40
 
 [tool.pylint."messages control"]
 disable = [

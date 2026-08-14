@@ -6,7 +6,7 @@ Hardware target: **Intel i9-14900K** + **NVIDIA RTX 4070 Ti SUPER** (16 GB).
 
 ![PersonalClipboard overlay](docs/images/overlay.png)
 
-The HUD is a translucent always-on-top tool window. **Mic** is the privacy kill switch. After a short silence, VAD stops the streaming microphone and idles Whisper; speech wakes them. **Settings** on the HUD picks language (English, Français, Español, Deutsch), opacity, Whisper model, and Ollama corrector. **Voice** shows the live partial and the last sentence. **Type** is the same correct-and-copy flow. **Meeting → Record** transcribes the room to a desktop markdown file.
+The HUD is a translucent always-on-top tool window. **Mic** is the privacy kill switch. After a short silence, VAD stops the streaming microphone and idles Whisper; speech wakes them. **Settings** on the HUD picks language (English, Français, Español, Deutsch), opacity, Whisper model, Ollama corrector, idle-mic-when-quiet, and type-ahead. **Voice** shows the live partial and the last sentence. **Type** is the same correct-and-copy flow; while that field is focused, grey suggestions come from the same local model and **Tab** inserts them. **Meeting → Record** transcribes the room to a desktop markdown file.
 
 ## Easy install (Windows)
 
@@ -26,11 +26,19 @@ ollama pull qwen2.5-coder:1.5b
 pythonw -m personalclipboard
 ```
 
-A **PersonalClipboard** shortcut on the Windows desktop (local only, not in this repo) should point at `.venv\Scripts\pythonw.exe` with arguments `-m personalclipboard` and working directory set to the clone. Recreate it after moving the folder.
+To ship a Windows executable (onedir, Whisper weights stay in the Hugging Face cache, Ollama stays a separate localhost service):
+
+```powershell
+.\scripts\build_exe.ps1
+```
+
+That writes `dist\PersonalClipboard\PersonalClipboard.exe` and retargets the local **PersonalClipboard** desktop shortcut at the exe (working directory = the exe folder). Do not commit `dist/` or the `.lnk`. Tray **Restart** prefers the exe when it exists.
+
+A **PersonalClipboard** shortcut on the Windows desktop is local only (gitignored). Recreate it with `python scripts\write_shortcut.py` after moving the folder.
 
 The first launch downloads Faster-Whisper `large-v3-turbo` into the Hugging Face cache and loads it on the GPU. Use `python -m personalclipboard` instead of `pythonw` if you want a console for errors.
 
-Only one overlay can run. Starting it again (desktop shortcut, tray **Restart**, or `pythonw -m personalclipboard`) stops the current process and starts a fresh one.
+Only one overlay can run. Starting it again (desktop shortcut, tray **Restart**, the exe, or `pythonw -m personalclipboard`) stops the current process and starts a fresh one.
 
 Windows Settings → Privacy → Microphone → allow desktop apps. After Whisper is ready, **Mic** turns on. Uncheck it to stop capture (no VAD probe). If PyAudio cannot open a device, capture falls back to **sounddevice**.
 
@@ -42,14 +50,15 @@ Full CUDA / cuDNN notes: [docs/SETUP.md](docs/SETUP.md).
 |---|---|
 | Speak, end with `.` `?` `!` | Corrected sentence → clipboard. Paste with Ctrl+V. |
 | Type, then Enter or `.` `?` `!` | Same correct-and-copy path. |
+| Type, **Tab** (field focused) | Insert the grey suggestion from the local corrector. |
 | **Copy** | Puts the last finished sentence on the clipboard again. |
 | Say **paste last** | Focuses the last other window and pastes. |
 | Say **copy last** | Copies the selection from the last other window. |
 | Say **correct last** or **Ctrl+Shift+A** | Rewrites the current clipboard (works with Mic off). |
 | **Record** | Meeting notes on the desktop. Speech goes to the file, not the clipboard. Headset calls only hear this microphone. |
-| **Settings** | Language, opacity, Whisper model, Ollama model, idle-mic-when-quiet. Saved in LOCALAPPDATA. |
+| **Settings** | Language, opacity, Whisper model, Ollama model, idle-mic-when-quiet, suggest-while-typing. Saved in LOCALAPPDATA. |
 
-Correction model: `qwen2.5-coder:1.5b` at `http://127.0.0.1:11434`. Partials never go to Ollama.
+Correction model: `qwen2.5-coder:1.5b` at `http://127.0.0.1:11434`. ASR partials never go to Ollama. Type-ahead uses the same model only while the Type field is focused.
 
 ## Dev
 

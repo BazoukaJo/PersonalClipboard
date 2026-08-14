@@ -54,14 +54,15 @@ Single local user on this PC.
 - FR-L3: Skip or timeout an in-flight correction if a newer committed sentence is ready.
 - FR-L4: Committed + corrected text is written with `QClipboard` (Qt).
 - FR-L5: `Ctrl+Shift+A` is a **global** hotkey (`pynput`); Qt shortcuts are insufficient.
+- FR-L6: While the Type field is focused (and Meeting Record is off), the same localhost model may suggest a short continuation as grey ghost text. Tab inserts it. ASR partials never use this path.
 
 ### 4.4 Overlay
 
 - FR-U1: PyQt6 frameless, translucent, always-on-top tool window + system tray.
 - FR-U2: Shows partial hypothesis, last commit, and status `listening | quiet | uncertain | locked | off`.
 - FR-U3: Enable switch is visible and reachable without focusing another app.
-- FR-U4: Only one process. A new launch (shortcut, tray Restart, or `pythonw`) stops the previous instance, then starts fresh.
-- FR-U5: HUD Settings: UI language, overlay opacity, Whisper model, Ollama model, VAD idle toggle. Persist under LOCALAPPDATA.
+- FR-U4: Only one process. A new launch (desktop shortcut to the exe, tray Restart, or `pythonw -m`) stops the previous instance, then starts fresh.
+- FR-U5: HUD Settings: UI language, overlay opacity, Whisper model, Ollama model, VAD idle toggle, type-ahead toggle. Persist under LOCALAPPDATA.
 
 ### 4.5 Cacophony
 

@@ -26,6 +26,7 @@ class SettingsPanel(QFrame):
     whisper_changed = pyqtSignal(str)
     ollama_changed = pyqtSignal(str)
     vad_changed = pyqtSignal(bool)
+    predict_changed = pyqtSignal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -46,6 +47,7 @@ class SettingsPanel(QFrame):
         body_layout.addLayout(_row(self._whisper_label, self._whisper))
         body_layout.addLayout(_row(self._ollama_label, self._ollama))
         body_layout.addWidget(self._vad)
+        body_layout.addWidget(self._predict)
         top = QHBoxLayout()
         top.setContentsMargins(0, 0, 0, 0)
         top.addWidget(self._header)
@@ -87,6 +89,8 @@ class SettingsPanel(QFrame):
         self._ollama.currentTextChanged.connect(self._emit_ollama)
         self._vad = QCheckBox(self)
         self._vad.toggled.connect(self._emit_vad)
+        self._predict = QCheckBox(self)
+        self._predict.toggled.connect(self._emit_predict)
 
     def retranslate(self, lang: str) -> None:
         self._lang = lang
@@ -98,6 +102,8 @@ class SettingsPanel(QFrame):
         self._ollama_label.setText(t(lang, "corrector"))
         self._vad.setText(t(lang, "vad"))
         self._vad.setToolTip(t(lang, "vad_tip"))
+        self._predict.setText(t(lang, "predict"))
+        self._predict.setToolTip(t(lang, "predict_tip"))
 
     def set_values(
         self,
@@ -108,6 +114,7 @@ class SettingsPanel(QFrame):
         ollama: str,
         ollama_models: list[str],
         vad: bool,
+        predict: bool,
     ) -> None:
         self._updating = True
         index = self._lang_box.findData(language)
@@ -117,6 +124,7 @@ class SettingsPanel(QFrame):
         models = list(dict.fromkeys(list(OLLAMA_CHOICES) + ollama_models + [ollama]))
         self._fill_combo(self._ollama, models, ollama)
         self._vad.setChecked(vad)
+        self._predict.setChecked(predict)
         self._updating = False
 
     def _fill_combo(self, box: QComboBox, names: list[str], current: str) -> None:
@@ -164,6 +172,10 @@ class SettingsPanel(QFrame):
     def _emit_vad(self, checked: bool) -> None:
         if not self._updating:
             self.vad_changed.emit(checked)
+
+    def _emit_predict(self, checked: bool) -> None:
+        if not self._updating:
+            self.predict_changed.emit(checked)
 
 
 def _row(label: QLabel, widget) -> QHBoxLayout:

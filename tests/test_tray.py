@@ -7,9 +7,13 @@ def test_about_identifies_the_app() -> None:
     assert app_version() in about_body()
     assert "127.0.0.1" in body
     assert "paste last" in body
+    assert "tab" in body
 
 
-def test_restart_relaunches_this_package() -> None:
+def test_restart_uses_exe_or_module() -> None:
     cmd = restart_command()
-    assert cmd[-2:] == ["-m", "personalclipboard"]
     assert cmd[0]
+    if len(cmd) == 1 and cmd[0].lower().endswith(".exe"):
+        assert "personalclipboard" in cmd[0].lower()
+        return
+    assert cmd[-2:] == ["-m", "personalclipboard"]

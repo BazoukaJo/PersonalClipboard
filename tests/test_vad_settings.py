@@ -31,11 +31,13 @@ def test_settings_roundtrip(tmp_path: Path) -> None:
     settings.ui_language = "fr"
     settings.overlay_opacity = 50
     settings.vad_enabled = True
+    settings.predict_enabled = False
     save_settings(settings, path)
     loaded = load_settings(path)
     assert loaded.ui_language == "fr"
     assert loaded.overlay_opacity == 50
     assert loaded.vad_enabled is True
+    assert loaded.predict_enabled is False
 
 
 def test_i18n_french_mic() -> None:

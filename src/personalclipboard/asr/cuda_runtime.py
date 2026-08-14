@@ -9,19 +9,38 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 _CONFIGURED = {"done": False}
+_NVIDIA_PKGS = (
+    "nvidia.cublas",
+    "nvidia.cudnn",
+    "nvidia.cuda_nvrtc",
+    "nvidia.cuda_runtime",
+)
+_FROZEN_RELS = (
+    "",
+    os.path.join("nvidia", "cublas", "bin"),
+    os.path.join("nvidia", "cudnn", "bin"),
+    os.path.join("nvidia", "cuda_nvrtc", "bin"),
+    os.path.join("nvidia", "cuda_runtime", "bin"),
+)
 
 
 def configure_cuda12_dlls() -> list[str]:
     """Prepend nvidia-*-cu12 bin dirs to PATH. Safe to call more than once."""
-    bin_dirs: list[str] = []
-    for pkg_name in (
-        "nvidia.cublas",
-        "nvidia.cudnn",
-        "nvidia.cuda_nvrtc",
-        "nvidia.cuda_runtime",
-    ):
+    bin_dirs = _wheel_bin_dirs() or _frozen_bin_dirs()
+    if not bin_dirs:
+        return []
+    _apply_bin_dirs(bin_dirs)
+    _CONFIGURED["done"] = True
+    return bin_dirs
+
+
+def _wheel_bin_dirs() -> list[str]:
+    found: list[str] = []
+    sub = "bin" if sys.platform == "win32" else "lib"
+    for pkg_name in _NVIDIA_PKGS:
         try:
             mod = __import__(pkg_name, fromlist=["__path__"])
         except ImportError:
@@ -29,13 +48,25 @@ def configure_cuda12_dlls() -> list[str]:
         pkg_dir = next(iter(getattr(mod, "__path__", [])), None)
         if not pkg_dir:
             continue
-        candidate = os.path.join(pkg_dir, "bin" if sys.platform == "win32" else "lib")
+        candidate = os.path.join(pkg_dir, sub)
         if os.path.isdir(candidate):
-            bin_dirs.append(candidate)
+            found.append(candidate)
+    return found
 
-    if not bin_dirs:
+
+def _frozen_bin_dirs() -> list[str]:
+    if not getattr(sys, "frozen", False):
         return []
+    frozen_root = getattr(sys, "_MEIPASS", "") or str(Path(sys.executable).resolve().parent)
+    found: list[str] = []
+    for rel in _FROZEN_RELS:
+        candidate = os.path.join(frozen_root, rel) if rel else frozen_root
+        if os.path.isdir(candidate):
+            found.append(candidate)
+    return found
 
+
+def _apply_bin_dirs(bin_dirs: list[str]) -> None:
     if sys.platform == "win32":
         current = os.environ.get("PATH", "")
         prefix = os.pathsep.join(bin_dirs)
@@ -46,11 +77,10 @@ def configure_cuda12_dlls() -> list[str]:
                 os.add_dll_directory(directory)
             except (OSError, FileNotFoundError):
                 continue
-    elif not _CONFIGURED["done"]:
-        existing = os.environ.get("LD_LIBRARY_PATH", "")
-        os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(
-            bin_dirs + ([existing] if existing else [])
-        )
-
-    _CONFIGURED["done"] = True
-    return bin_dirs
+        return
+    if _CONFIGURED["done"]:
+        return
+    existing = os.environ.get("LD_LIBRARY_PATH", "")
+    os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(
+        bin_dirs + ([existing] if existing else [])
+    )

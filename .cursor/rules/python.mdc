@@ -1,0 +1,26 @@
+---
+description: Python package conventions — typing, threads, no blocking UI/audio
+globs: src/personalclipboard/**/*.py
+alwaysApply: false
+---
+
+# Python
+
+Package lives under `src/personalclipboard`. Public functions and dataclasses are typed.
+
+```python
+# BAD — GPU / HTTP / clipboard on the PortAudio or Qt thread
+def callback(in_data, frame_count, time_info, status):
+    model.transcribe(in_data)
+    return (in_data, pyaudio.paContinue)
+
+# GOOD — callback copies into the ring buffer only
+def callback(in_data, frame_count, time_info, status):
+    ring.write(in_data)
+    return (None, pyaudio.paContinue)
+```
+
+- Qt main thread: overlay, tray, enable switch, `QClipboard` only.
+- ASR worker owns CUDA Faster-Whisper. LLM worker owns localhost Ollama HTTP.
+- Do not `time.sleep` or block in the audio callback. Prefer queues/`threading.Event` between workers.
+- Config defaults belong in `config.py` (model names, hop size, hotkey, Ollama host).

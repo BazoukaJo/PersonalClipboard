@@ -1,0 +1,11 @@
+---
+description: Unreal Blueprint interchange is T3D clipboard text only — not in the overlay
+globs: ue/**
+alwaysApply: false
+---
+
+# Unreal T3D
+
+Deferred. The overlay is dictation only. Do not add a Blueprint mode switch.
+
+If T3D is wired later, serialize node graphs as Unreal **T3D** (`Begin Object` / `End Object`) onto the Windows clipboard. Do not write `.uasset` / `.umap`. Validate against `ue/SAMPLE_PRINT_STRING.t3d`.

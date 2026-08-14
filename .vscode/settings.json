@@ -1,0 +1,8 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.analysis.extraPaths": ["src"],
+  "pylint.args": [
+    "--extension-pkg-allow-list=PyQt6",
+    "--disable=missing-module-docstring,missing-class-docstring,missing-function-docstring,invalid-name,import-outside-toplevel,broad-exception-caught"
+  ]
+}

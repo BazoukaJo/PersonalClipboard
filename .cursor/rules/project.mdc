@@ -1,0 +1,19 @@
+---
+description: Core product constraints — local-only, latency-first, enable-switch privacy
+alwaysApply: true
+---
+
+# PersonalClipboard
+
+Local Windows dictation overlay. Audio, transcripts, clipboard, and LLM stay on this PC.
+
+- No cloud STT/LLM, telemetry, or crash-report uploads. Ollama only at `127.0.0.1`.
+- Master **enable switch ON**: always-on Whisper (overlapping windows). **OFF**: stop the mic callback and idle the CUDA ASR worker (privacy kill switch).
+- Latency-first: overlay partials under ~400 ms; clipboard commit under ~1 s after end of sentence.
+- Never send partial ASR hypotheses to Ollama. Correct on sentence commit or `Ctrl+Shift+A` only.
+- Default models: Faster-Whisper `large-v3-turbo` FP16 on CUDA; `qwen2.5-coder:1.5b` for correction so Unreal can share 16 GB VRAM.
+- `Ctrl+Shift+A` reformats the current clipboard (works with capture off).
+- Dictation only in the overlay. Do not add a Blueprint / Unreal mode switch.
+- Do not persist microphone audio unless an explicit debug flag is on; never commit recordings.
+
+See `AGENTS.md` and `docs/ARCHITECTURE.md`.

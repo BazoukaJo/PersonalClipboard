@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "personalclipboard"
+version = "0.1.0"
+description = "Local always-on clipboard intelligence: CUDA Faster-Whisper, Ollama, PyQt6 overlay."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "PersonalClipboard" }]
+dependencies = [
+    "faster-whisper",
+    "PyAudio",
+    "PyQt6",
+    "ollama",
+    "numpy",
+    "pynput",
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cuda-nvrtc-cu12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pylint"]
+
+[project.scripts]
+personalclipboard = "personalclipboard.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"
+
+[tool.pylint.main]
+extension-pkg-allow-list = ["PyQt6"]
+
+[tool.pylint.design]
+max-attributes = 25
+max-args = 8
+max-positional-arguments = 8
+min-public-methods = 0
+max-public-methods = 25
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "invalid-name",
+    "import-outside-toplevel",
+    "broad-exception-caught",
+]

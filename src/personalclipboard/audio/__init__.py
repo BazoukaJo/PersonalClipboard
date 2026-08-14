@@ -1,0 +1,1 @@
+"""WASAPI capture via PyAudio."""

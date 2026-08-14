@@ -1,0 +1,1 @@
+"""Transparent overlay and tray."""

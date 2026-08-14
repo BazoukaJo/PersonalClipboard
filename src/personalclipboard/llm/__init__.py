@@ -1,1 +1,1 @@
-"""Localhost Ollama correction."""
+"""Localhost Ollama: sentence correction and Type-field continuation."""

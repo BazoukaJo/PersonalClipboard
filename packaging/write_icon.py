@@ -13,7 +13,7 @@ from personalclipboard.ui.tray import make_tray_icon
 
 def main() -> int:
     _qt = QApplication.instance() or QApplication(sys.argv)
-    assert _qt is not None
+    assert _qt is not None  # QPixmap needs an application
     icon: QIcon = make_tray_icon()
     pix = icon.pixmap(256, 256)
     target = Path(__file__).resolve().parent / "app.ico"

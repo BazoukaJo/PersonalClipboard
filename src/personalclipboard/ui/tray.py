@@ -44,6 +44,7 @@ def repo_root() -> Path:
 
 
 def packaged_exe() -> Path | None:
+    """Frozen exe, or dist/... after a local PyInstaller build. Tray Restart prefers this."""
     if getattr(sys, "frozen", False):
         exe = Path(sys.executable).resolve()
         return exe if exe.is_file() else None

@@ -1,4 +1,4 @@
-"""Background Ollama jobs. Drop results if a newer commit id exists."""
+"""Background Ollama jobs. Newer job ids drop in-flight results."""
 
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ class LlmWorker:
     def submit(self, text: str) -> int:
         with self._lock:
             self._latest += 1
+            # A committed sentence must not keep showing a stale Type ghost.
             self._latest_complete += 1
             job_id = self._latest
         self._queue.put((job_id, "correct", text))

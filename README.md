@@ -8,12 +8,29 @@ Hardware target: **Intel i9-14900K** + **NVIDIA RTX 4070 Ti SUPER** (16 GB).
 
 The HUD is a translucent always-on-top tool window. **Mic** is the privacy kill switch. After a short silence, VAD stops the streaming microphone and idles Whisper; speech wakes them. **Settings** on the HUD picks language (English, Français, Español, Deutsch), opacity, Whisper model, Ollama corrector, idle-mic-when-quiet, and type-ahead. **Voice** shows the live partial and the last sentence. **Type** is the same correct-and-copy flow; while that field is focused, grey suggestions come from the same local model and **Tab** inserts them. **Meeting → Record** transcribes the room to a desktop markdown file.
 
+## Download (Windows)
+
+GitHub limits each file to 2 GiB, so v0.1 is two zips. Download **both** from [v0.1.0](https://github.com/BazoukaJo/PersonalClipboard/releases/tag/v0.1.0) and unzip them into the **same** folder:
+
+1. `PersonalClipboard-0.1.0-windows-x64.zip` — app
+2. `PersonalClipboard-0.1.0-windows-x64-cuda12.zip` — CUDA 12 DLLs (`_internal\nvidia`)
+
+Then run `PersonalClipboard\PersonalClipboard.exe`.
+
+You still need a CUDA 12 capable **NVIDIA driver** and [Ollama for Windows](https://ollama.com/download) listening on `127.0.0.1`:
+
+```powershell
+ollama pull qwen2.5-coder:1.5b
+```
+
+Whisper weights download into the Hugging Face cache on first launch (not inside the zip). Windows Settings → Privacy → Microphone → allow desktop apps.
+
 ## Easy install (Windows)
 
 You need a recent **NVIDIA driver** (CUDA 12 capable), **Python 3.11 or 3.12**, and [Ollama for Windows](https://ollama.com/download). You do **not** need to install the CUDA Toolkit if `pip` can install the `nvidia-*-cu12` wheels listed in `pyproject.toml`.
 
 ```powershell
-gh repo clone BazoukaJo/PersonalClipboard
+git clone https://github.com/BazoukaJo/PersonalClipboard.git
 cd PersonalClipboard
 
 py -3.11 -m venv .venv
@@ -85,4 +102,4 @@ python scripts\capture_overlay.py
 
 ## License
 
-Private local tool. Not for distribution of microphone data.
+Source is public. Audio, transcripts, and clipboard text stay on this PC. Do not ship microphone recordings.

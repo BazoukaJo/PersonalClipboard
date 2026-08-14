@@ -262,10 +262,11 @@ class Overlay(QWidget):
             self.clamp_to_screen()
 
     def nativeEvent(self, eventType, message):  # type: ignore[override]
-        """Hit-test resize borders. Always return (bool, int); super() crashes Qt on Win11."""
+        """Resize hit-test. Must return (bool, int); super().nativeEvent aborts Qt on Win11."""
         try:
             if sys.platform == "win32" and _is_win_generic_msg(eventType):
                 addr = int(message)
+                # MSG.from_address on a small integer is not a real pointer.
                 if addr > 0xFFFF:
                     hit = self._nchittest_from_message(addr)
                     if hit is not None:
@@ -292,7 +293,7 @@ class Overlay(QWidget):
         from ctypes import wintypes
 
         msg = wintypes.MSG.from_address(message)
-        if int(msg.message) != 0x0084:
+        if int(msg.message) != 0x0084:  # WM_NCHITTEST
             return None
         global_x, global_y = unpack_nchittest_point(int(msg.lParam))
         local = self.mapFromGlobal(QPoint(global_x, global_y))
@@ -324,7 +325,7 @@ class Overlay(QWidget):
 
     def set_typed(self, text: str) -> None:
         self._updating_input = True
-        self._input.set_blocked(True)
+        self._input.set_blocked(True)  # setText must not start type-ahead
         self._input.setText(text)
         self._typed_prev = text
         self._input.set_blocked(False)
@@ -337,6 +338,7 @@ class Overlay(QWidget):
         return self._input.hasFocus() and self._input.isEnabled() and not self._meeting_on
 
     def focusNextPrevChild(self, next: bool) -> bool:  # pylint: disable=redefined-builtin
+        # Tab in Type stays there (ghost accept). Shift+Tab can leave the field.
         if next and self._input.hasFocus() and self._input.isEnabled():
             return False
         return super().focusNextPrevChild(next)
@@ -347,6 +349,7 @@ class Overlay(QWidget):
 
     def set_predict_enabled(self, enabled: bool) -> None:
         self._predict_want = enabled
+        # Meeting Record keeps the setting but turns the ghost off until Stop.
         self._input.set_predict_enabled(enabled and not self._meeting_on)
 
     def apply_typed_correction(self, original: str, corrected: str) -> None:

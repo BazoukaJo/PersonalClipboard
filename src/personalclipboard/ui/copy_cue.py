@@ -51,6 +51,7 @@ def play_copy_cue() -> None:
     import winsound
 
     try:
+        # SND_MEMORY: cue is generated in RAM; never written to disk.
         winsound.PlaySound(
             copy_wav_bytes(),
             winsound.SND_MEMORY | winsound.SND_ASYNC | winsound.SND_NODEFAULT,

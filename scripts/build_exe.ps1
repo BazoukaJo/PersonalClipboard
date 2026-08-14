@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+# Repo root is the parent of scripts/. Whisper weights are not bundled.
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
 $py = Join-Path (Get-Location) ".venv\Scripts\python.exe"

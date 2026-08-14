@@ -6,7 +6,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 
 class UiBridge(QObject):
-    """Owned by the Qt main thread. Workers may emit; slots must be QObjects."""
+    """Qt-thread owner for worker signals. `predicted` is (typed prefix, ghost suffix)."""
     partial = pyqtSignal(str)
     status = pyqtSignal(str)
     commit = pyqtSignal(str)

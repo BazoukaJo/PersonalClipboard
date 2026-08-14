@@ -196,11 +196,13 @@ class AudioCapture:
         raise OSError("sounddevice found no input devices.")
 
     def _callback(self, in_data: bytes | None, _frame_count: int, _time_info: dict, _status: int):
+        # PortAudio realtime path: copy samples only — no locks, GPU, or Qt.
         if in_data:
             self.ring.write(in_data)
         return (None, pyaudio.paContinue)
 
     def _sd_callback(self, indata, _frames: int, _time_info: object, _status: object) -> None:
+        # Same contract as PortAudio: convert and copy into the ring, return.
         if indata is None or getattr(indata, "size", 0) == 0:
             return
         mono = indata[:, 0] if getattr(indata, "ndim", 1) > 1 else indata

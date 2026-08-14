@@ -23,6 +23,8 @@ OLLAMA_CHOICES = (
     "llama3.2:3b",
 )
 
+# HUD prefs only. Mic enable is never written — each launch starts capture-off
+# until Whisper is ready, then the overlay turns Mic on.
 _PERSIST = (
     "ui_language",
     "overlay_opacity",
@@ -48,12 +50,12 @@ class Settings:
     compute_type: str = "float16"
     beam_size_partial: int = 1
     beam_size_commit: int = 3
-    condition_on_previous_text: bool = False
+    condition_on_previous_text: bool = False  # overlapping windows must not inherit text
     ollama_host: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen2.5-coder:1.5b"
     ollama_timeout_s: float = 8.0
     hotkey: str = "<ctrl>+<shift>+a"
-    persist_audio: bool = False
+    persist_audio: bool = False  # debug WAV only; never default on
     preferred_input: str = "maono"
     ring_seconds: float = 8.0
     no_speech_prob_max: float = 0.65

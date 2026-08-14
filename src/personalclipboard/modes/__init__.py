@@ -1,4 +1,4 @@
-"""Dictation correction prompt."""
+"""Ollama system prompts: prose correction and Type-field continuation."""
 
 from personalclipboard.modes.ambient import AMBIENT_SYSTEM_PROMPT
 from personalclipboard.modes.complete import COMPLETE_SYSTEM_PROMPT

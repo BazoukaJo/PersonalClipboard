@@ -19,6 +19,7 @@ _NVIDIA_PKGS = (
     "nvidia.cuda_runtime",
 )
 _FROZEN_RELS = (
+    # PyInstaller 6 onedir: sys._MEIPASS is dist/.../_internal.
     "",
     os.path.join("nvidia", "cublas", "bin"),
     os.path.join("nvidia", "cudnn", "bin"),

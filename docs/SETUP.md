@@ -21,10 +21,8 @@ If `ctranslate2` errors on CUDA 12 + cuDNN 8, the cu12 wheels in `pyproject.toml
 
 ## 2. Clone and venv
 
-The GitHub repo is **private**. Use `gh` (you must be able to read `BazoukaJo/PersonalClipboard`):
-
 ```powershell
-gh repo clone BazoukaJo/PersonalClipboard
+git clone https://github.com/BazoukaJo/PersonalClipboard.git
 cd PersonalClipboard
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1

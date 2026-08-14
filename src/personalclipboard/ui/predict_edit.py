@@ -1,4 +1,4 @@
-"""Type field with grey ghost completion. Tab accepts. Only while focused."""
+"""Type field: grey ghost from localhost Ollama. Tab inserts; only while focused."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from personalclipboard.llm.complete import should_predict
 
 
 class PredictLineEdit(QLineEdit):
+    """QLineEdit that paints a ghost suffix. Tab never leaves this field."""
+
     prediction_requested = pyqtSignal(str)
 
     def __init__(self, parent=None) -> None:
@@ -59,13 +61,14 @@ class PredictLineEdit(QLineEdit):
         suffix = self._ghost
         if not suffix:
             return False
-        self._blocked = True
+        self._blocked = True  # insert() fires textChanged; do not request a new ghost
         self.clear_ghost()
         self.insert(suffix)
         self._blocked = False
         return True
 
     def event(self, a0: QEvent | None) -> bool:  # type: ignore[override]
+        # keyPressEvent is too late: Qt's focus chain consumes Tab first.
         if a0 is not None and a0.type() == QEvent.Type.KeyPress:
             if isinstance(a0, QKeyEvent) and self._handle_predict_key(a0):
                 return True
@@ -80,6 +83,7 @@ class PredictLineEdit(QLineEdit):
         tab = event.key() == Qt.Key.Key_Tab
         shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
         if tab and not shift:
+            # No ghost: still stay here. Shift+Tab may leave via the overlay.
             self.accept_ghost()
             event.accept()
             return True
@@ -96,6 +100,7 @@ class PredictLineEdit(QLineEdit):
 
     def paintEvent(self, a0: QPaintEvent | None) -> None:
         super().paintEvent(a0)
+        # Ghost sits after the typed text; skip if the cursor is not at the end.
         if not self._ghost or not self.hasFocus() or self.cursorPosition() != len(self.text()):
             return
         option = QStyleOptionFrame()

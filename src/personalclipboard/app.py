@@ -508,6 +508,7 @@ class PersonalClipboardApp(QObject):
         self._overlay.set_predict_enabled(enabled)
 
     def _on_prediction_requested(self, prefix: str) -> None:
+        # Type field only. Voice partials never reach submit_complete.
         if not self._settings.predict_enabled or not self._overlay.type_field_active():
             return
         self._llm.submit_complete(prefix)
@@ -563,14 +564,14 @@ def main(settings: Settings | None = None) -> int:
     settings = settings or load_settings()
     qt = QApplication(sys.argv)
     qt.setApplicationName("PersonalClipboard")
-    qt.setQuitOnLastWindowClosed(False)
+    qt.setQuitOnLastWindowClosed(False)  # Hide is not Exit; the tray owns the process
     install_single_instance(qt)
     app = PersonalClipboardApp(qt, settings)
     qt.aboutToQuit.connect(app.shutdown)
     return int(qt.exec())
 
 
-_FAULT_LOG: list[object] = []
+_FAULT_LOG: list[object] = []  # keep the handle alive; faulthandler does not own it
 
 
 def _install_fault_log() -> None:

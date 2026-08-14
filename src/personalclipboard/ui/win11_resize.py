@@ -73,6 +73,7 @@ def enable_thick_frame(hwnd: int) -> None:
 
 
 def unpack_nchittest_point(lparam: int) -> tuple[int, int]:
+    """Signed 16-bit x/y packed in WM_NCHITTEST lParam (can be off-screen)."""
     raw_x = lparam & 0xFFFF
     raw_y = (lparam >> 16) & 0xFFFF
     x = raw_x - 0x10000 if raw_x >= 0x8000 else raw_x

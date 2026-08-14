@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller onedir spec. Whisper weights stay in the Hugging Face cache."""
+"""PyInstaller onedir spec.
+
+Whisper weights stay in the Hugging Face cache. Ollama is a separate localhost
+service. Do not collect_all('PyQt6') — that pulls unused QML plugins.
+"""
 
 from __future__ import annotations
 

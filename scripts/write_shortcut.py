@@ -29,6 +29,7 @@ def write_shortcut(lnk: Path, exe: Path) -> None:
     work = str(exe.parent)
     target = str(exe)
     link = str(lnk)
+    # Clear Arguments: an old pythonw shortcut still has `-m personalclipboard`.
     script = (
         "$s = New-Object -ComObject WScript.Shell\n"
         f"$l = $s.CreateShortcut('{link.replace(chr(39), chr(39)+chr(39))}')\n"

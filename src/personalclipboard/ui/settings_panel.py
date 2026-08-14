@@ -1,4 +1,4 @@
-"""Collapsible HUD settings: language, opacity, models, VAD."""
+"""Collapsible HUD settings: language, opacity, models, VAD, type-ahead."""
 
 from __future__ import annotations
 

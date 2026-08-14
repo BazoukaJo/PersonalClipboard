@@ -1,4 +1,8 @@
-"""Ollama HTTP to 127.0.0.1 only. Committed sentences or Ctrl+Shift+A — never partials."""
+"""Ollama HTTP to 127.0.0.1 only.
+
+Used for sentence correction (commit / Ctrl+Shift+A) and Type-field continuation.
+Never call this with ASR partials.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +27,7 @@ class Corrector:
         self._chat_url = f"{host}/api/chat"
 
     def correct(self, text: str) -> str:
-        """Rewrite `text`. Callers skip stale jobs."""
+        """Rewrite `text`. Fail-open to the original if Ollama is down."""
         stripped = text.strip()
         if not stripped:
             return stripped
@@ -48,7 +52,7 @@ class Corrector:
             return stripped
 
     def complete(self, prefix: str) -> str:
-        """Return a short continuation for the Type field. Empty if unused."""
+        """Ghost suffix for the Type field, or empty if Ollama has nothing useful."""
         stripped = prefix.strip()
         if len(stripped) < 4:
             return ""

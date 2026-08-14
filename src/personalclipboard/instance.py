@@ -187,6 +187,7 @@ def _accept_replace(server: QLocalServer, qt: QApplication) -> None:
     payload = raw.data().replace(b"\r", b"")
     conn.close()
     conn.deleteLater()
+    # Empty connects are listen probes. Only an explicit replace payload may quit.
     if _REPLACE.strip() in payload:
         qt.quit()
 

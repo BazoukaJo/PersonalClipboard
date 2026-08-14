@@ -60,7 +60,7 @@ class AsrEngine:
         return self._load_error
 
     def load(self) -> None:
-        """Load large-v3-turbo on CUDA float16 and keep weights resident."""
+        """Load the configured Faster-Whisper model and keep weights on CUDA."""
         try:
             from personalclipboard.asr.cuda_runtime import configure_cuda12_dlls
             from faster_whisper import WhisperModel
@@ -94,7 +94,7 @@ class AsrEngine:
             return self._assembler.take_remainder()
 
     def start(self) -> None:
-        """Run the hop loop while enable is ON. condition_on_previous_text=False."""
+        """Run the hop loop while Mic is ON."""
         if self._model is None:
             raise RuntimeError(self._load_error or "Whisper model is not loaded")
         with self._state_lock:
@@ -223,7 +223,7 @@ class AsrEngine:
     def _emit_command(self, command: str) -> None:
         now = time.monotonic()
         if command == self._last_command and (now - self._last_command_at) < 1.2:
-            return
+            return  # overlapping hops repeat the same spoken command
         self._last_command = command
         self._last_command_at = now
         self._assembler.reset()
@@ -249,6 +249,8 @@ def _transcribe(
     beam_size: int,
     condition_on_previous_text: bool,
 ) -> tuple[str, float, float]:
+    # condition_on_previous_text=False: overlapping windows must not inherit prior text.
+    # vad_filter=False: this process owns VAD (QuietIdle + VoiceGate).
     segments, _info = model.transcribe(
         audio,
         beam_size=beam_size,

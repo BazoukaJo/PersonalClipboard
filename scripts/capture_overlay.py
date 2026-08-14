@@ -1,13 +1,12 @@
-"""Render the compact HUD to docs/images/overlay.png for the README."""
+"""Render the HUD to docs/images/overlay.png for the README.
+
+Do not use the offscreen Qt platform: it drops Segoe UI and the PNG becomes tofu boxes.
+"""
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("QT_OPENGL", "software")
 
 from PyQt6.QtCore import QPoint, Qt, QTimer
 from PyQt6.QtGui import QColor, QPainter, QPixmap
@@ -20,12 +19,15 @@ _OUT = _ROOT / "docs" / "images" / "overlay.png"
 
 
 def _stage(overlay: Overlay) -> None:
+    overlay.apply_language("en")
+    overlay.set_opacity(35)
     overlay.set_listen_enabled(True)
     overlay.set_enable_checked(True)
     overlay.set_status("locked")
     overlay.show_partial("the light is too harsh on the character")
     overlay.show_audio_phrase("The light is too harsh on the character.")
-    overlay.set_typed("")
+    overlay.set_typed("The meeting is")
+    overlay.show_typed_phrase("The meeting is scheduled for Monday.")
     overlay.resize(520, max(overlay.sizeHint().height(), 280))
 
 
@@ -33,9 +35,9 @@ def _save(overlay: Overlay) -> None:
     overlay.adjustSize()
     overlay.resize(520, max(overlay.height(), overlay.sizeHint().height(), 280))
     overlay.repaint()
-    pad = 40
+    pad = 36
     canvas = QPixmap(overlay.width() + pad * 2, overlay.height() + pad * 2)
-    canvas.fill(QColor(24, 26, 30))
+    canvas.fill(QColor(32, 34, 38))
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     overlay.render(painter, QPoint(pad, pad))
@@ -58,7 +60,7 @@ def main() -> int:
         _save(overlay)
         app.quit()
 
-    QTimer.singleShot(250, finish)
+    QTimer.singleShot(400, finish)
     return int(app.exec())
 
 

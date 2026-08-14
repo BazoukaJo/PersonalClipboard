@@ -1,4 +1,7 @@
-"""Put bundled CUDA 12 DLLs on PATH before CTranslate2 can load."""
+"""Put bundled CUDA 12 DLLs on PATH before CTranslate2 can LoadLibrary.
+
+PyInstaller 6 onedir sets sys._MEIPASS to the `_internal` folder next to the exe.
+"""
 
 from __future__ import annotations
 

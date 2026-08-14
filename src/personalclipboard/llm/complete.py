@@ -12,6 +12,7 @@ def should_predict(
     enabled: bool,
     blocked: bool,
 ) -> bool:
+    """True only while Type is focused, enabled, and not already a finished sentence."""
     if not focused or not enabled or blocked:
         return False
     stripped = text.strip()

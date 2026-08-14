@@ -22,5 +22,5 @@ def normalize_phrase(text: str) -> str:
 
 
 def match_command(text: str) -> str | None:
-    """Return command id or None. Matches the whole phrase only."""
+    """Whole-phrase match only, so 'paste last' inside a sentence is not a command."""
     return _ALIASES.get(normalize_phrase(text))

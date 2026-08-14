@@ -67,7 +67,7 @@ End-to-end overlay partial ≈ hop + decode (not a 30 s Whisper chunk).
 | Ollama `qwen2.5-coder:1.5b` | 20–80 | After commit only |
 | Clipboard commit | — | Target **< 1 s** after sentence end |
 
-If hop + decode exceeds 400 ms, shrink hop before shrinking the model. If Unreal is GPU-heavy, keep Whisper loaded and consider CPU offload for Ollama rather than unloading ASR.
+If hop + decode exceeds 400 ms, shrink hop before shrinking the model. If another GPU app is heavy, keep Whisper loaded and consider CPU offload for Ollama rather than unloading ASR.
 
 ## 5. VRAM split (16 GB)
 
@@ -75,10 +75,10 @@ If hop + decode exceeds 400 ms, shrink hop before shrinking the model. If Unreal
 |---|---|---|
 | faster-whisper `large-v3-turbo` FP16 | ~3 GB | Always-on ASR while enable is ON |
 | `qwen2.5-coder:1.5b` (Ollama) | ~1 GB | Sentence correction |
-| Unreal Editor + OS | remainder | Must still fit |
-| Headroom | ~7+ GB | Keep the 1.5B default while UE may be open |
+| Other GPU apps + OS | remainder | Must still fit |
+| Headroom | ~7+ GB | Keep the 1.5B default while the card is shared |
 
-Do not default a 7B+ correction model while Unreal may be open.
+Do not default a 7B+ correction model while other GPU apps may be open.
 
 ## 6. Enable switch
 
@@ -101,14 +101,12 @@ No pyannote on the hot path.
 ## 8. Clipboard and hotkey
 
 - Ambient: commit → (optional) Ollama → `QClipboard.setText`.
-- `Ctrl+Shift+A`: read clipboard → Ollama with **active mode** system prompt → write back. Independent of enable.
+- `Ctrl+Shift+A`: read clipboard → Ollama with the dictation system prompt → write back. Independent of enable.
 - Register the hotkey with `pynput` (global). `QShortcut` only works when the overlay is focused.
 
-## 9. Meeting notes and deferred Blueprint
+## 9. Meeting notes
 
 Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. Commits append to a desktop markdown file. The overlay Copy control is disabled while recording.
-
-Blueprint / T3D generation is **not** in the overlay. Sample graphs stay in `ue/` for a later pass (`ue/EUW_PasteT3D.md`). Do not add a mode switch to the HUD.
 
 ## 10. Module map
 

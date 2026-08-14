@@ -25,3 +25,4 @@ huggingface/
 Thumbs.db
 .python-version
 *.orig
+*.lnk

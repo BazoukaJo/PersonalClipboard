@@ -3,7 +3,7 @@
 Local, always-on Windows desktop app: microphone → CUDA Faster-Whisper → localhost Ollama correction → clipboard, with a translucent PyQt6 overlay.
 
 **Hardware target:** Intel i9-14900K + NVIDIA RTX 4070 Ti SUPER (16 GB).
-**Phase:** live dictation overlay. Do not add Blueprint / Unreal T3D to the HUD.
+**Phase:** live dictation overlay.
 
 ## Goals
 
@@ -35,7 +35,7 @@ Meeting Record → same ASR → desktop markdown (no clipboard)
 - **Never** send partial hypotheses to Ollama. Correct on commit or hotkey only.
 - `condition_on_previous_text=False` on streaming windows.
 
-Defaults: Whisper `large-v3-turbo` / `turbo`, `device="cuda"`, `compute_type="float16"`, `beam_size=1` partials / `3` commit. Correction model: `qwen2.5-coder:1.5b` (~1 GB) so Unreal can share VRAM. Do not default to 14B+ while UE may be open.
+Defaults: Whisper `large-v3-turbo` / `turbo`, `device="cuda"`, `compute_type="float16"`, `beam_size=1` partials / `3` commit. Correction model: `qwen2.5-coder:1.5b` (~1 GB) so other GPU apps can share VRAM. Do not default to 14B+.
 
 Latency targets: overlay partials **< ~400 ms**; clipboard commit **< ~1 s** after end of sentence.
 
@@ -54,8 +54,6 @@ Latency targets: overlay partials **< ~400 ms**; clipboard commit **< ~1 s** aft
 | Type | Enter or `.` `?` `!` in the Type field | Same as dictation |
 | Reformat | `Ctrl+Shift+A` or say correct last | Rewrite of current clipboard |
 | Meeting | Record | Transcript → `Desktop/Meeting YYYY-MM-DD HHMM.md` |
-
-Do not expose Blueprint / Unreal T3D in the overlay. Dictation only. `ue/` holds T3D fixtures only.
 
 ## Package layout
 

@@ -53,7 +53,7 @@ ollama pull qwen2.5-coder:1.5b
 ollama run qwen2.5-coder:1.5b "Reply with the single word: pong"
 ```
 
-Keep the default at `qwen2.5-coder:1.5b` (~1 GB) while Unreal may share the 16 GB card. Do not bind Ollama to `0.0.0.0`.
+Keep the default at `qwen2.5-coder:1.5b` (~1 GB) so other GPU work can share the 16 GB card. Do not bind Ollama to `0.0.0.0`.
 
 ## 5. Run
 
@@ -64,6 +64,8 @@ pythonw -m personalclipboard
 Use `python -m personalclipboard` for a console. After Whisper loads, Mic turns on. Uncheck Mic to idle capture and CUDA ASR. Ctrl+Shift+A still reformats the clipboard.
 
 Preferred WASAPI input: a device whose name contains `maono` when present (`config.py` `preferred_input`).
+
+A desktop shortcut is a local Windows `.lnk` only. Do not add it to the repo. Point it at `.venv\Scripts\pythonw.exe`, arguments `-m personalclipboard`, working directory the clone.
 
 ## 6. Ready when
 

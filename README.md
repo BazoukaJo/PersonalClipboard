@@ -26,6 +26,8 @@ ollama pull qwen2.5-coder:1.5b
 pythonw -m personalclipboard
 ```
 
+A **PersonalClipboard** shortcut on the Windows desktop (local only, not in this repo) should point at `.venv\Scripts\pythonw.exe` with arguments `-m personalclipboard` and working directory set to the clone. Recreate it after moving the folder.
+
 The first launch downloads Faster-Whisper `large-v3-turbo` into the Hugging Face cache and loads it on the GPU. Use `python -m personalclipboard` instead of `pythonw` if you want a console for errors.
 
 Windows Settings → Privacy → Microphone → allow desktop apps. After Whisper is ready, **Mic** turns on. Uncheck it to stop the WASAPI stream and idle CUDA ASR.
@@ -67,7 +69,7 @@ python scripts\capture_overlay.py
 |---|---|
 | [docs/SETUP.md](docs/SETUP.md) | Driver, venv, Whisper smoke test, Ollama |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Threads, VRAM, latency |
-| [docs/PRD.md](docs/PRD.md) | Requirements (Blueprint mode is deferred) |
+| [docs/PRD.md](docs/PRD.md) | Requirements |
 | `AGENTS.md` | Constraints for coding agents |
 
 ## License

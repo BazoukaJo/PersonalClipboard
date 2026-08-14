@@ -337,6 +337,17 @@ class Overlay(QWidget):
     def type_field_active(self) -> bool:
         return self._input.hasFocus() and self._input.isEnabled() and not self._meeting_on
 
+    def focus_type_field(self) -> None:
+        if not self.isVisible():
+            self.show()
+        self.raise_()
+        self.activateWindow()
+        self._input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self._input.setCursorPosition(len(self._input.text()))
+
+    def release_type_field(self) -> None:
+        self._input.clearFocus()
+
     def focusNextPrevChild(self, next: bool) -> bool:  # pylint: disable=redefined-builtin
         # Tab in Type stays there (ghost accept). Shift+Tab can leave the field.
         if next and self._input.hasFocus() and self._input.isEnabled():

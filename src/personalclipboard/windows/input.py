@@ -27,47 +27,63 @@ user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BO
 user32.AttachThreadInput.restype = wintypes.BOOL
 user32.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
 user32.AllowSetForegroundWindow.restype = wintypes.BOOL
+user32.SetFocus.argtypes = [wintypes.HWND]
+user32.SetFocus.restype = wintypes.HWND
+user32.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.c_void_p]
+user32.GetGUIThreadInfo.restype = wintypes.BOOL
 kernel32.GetCurrentThreadId.restype = wintypes.DWORD
 
 _SW_RESTORE = 9
 _ASFW_ANY = 0xFFFFFFFF
 
 
+class _GUITHREADINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("hwndActive", wintypes.HWND),
+        ("hwndFocus", wintypes.HWND),
+        ("hwndCapture", wintypes.HWND),
+        ("hwndMenuOwner", wintypes.HWND),
+        ("hwndMoveSize", wintypes.HWND),
+        ("hwndCaret", wintypes.HWND),
+        ("rcCaret", wintypes.RECT),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cbSize = ctypes.sizeof(_GUITHREADINFO)
+
+
 class WindowInput:
     def __init__(self) -> None:
         self._pid = os.getpid()
         self._last_foreign: int | None = None
+        self._last_focus: int | None = None
         self._keys = Controller()
 
     def poll(self) -> None:
         hwnd = int(user32.GetForegroundWindow() or 0)
-        if hwnd and _pid_of(hwnd) != self._pid:
-            self._last_foreign = hwnd
+        if not hwnd or _pid_of(hwnd) == self._pid:
+            return
+        self._last_foreign = hwnd
+        child = _focused_control(hwnd)
+        if child and _pid_of(child) != self._pid:
+            self._last_focus = child
+        else:
+            self._last_focus = hwnd
 
     def focus_last_foreign(self) -> bool:
         hwnd = self._last_foreign
         if not hwnd or not user32.IsWindow(hwnd):
             return False
-        user32.ShowWindow(hwnd, _SW_RESTORE)
-        user32.AllowSetForegroundWindow(_ASFW_ANY)
-        current = int(kernel32.GetCurrentThreadId())
-        target_tid = _thread_of(hwnd)
-        foreground = int(user32.GetForegroundWindow() or 0)
-        fg_tid = _thread_of(foreground) if foreground else 0
-        attached_fg = False
-        attached_target = False
-        if fg_tid and fg_tid != current:
-            attached_fg = bool(user32.AttachThreadInput(current, fg_tid, True))
-        if target_tid and target_tid != current:
-            attached_target = bool(user32.AttachThreadInput(current, target_tid, True))
-        user32.BringWindowToTop(hwnd)
-        focused = bool(user32.SetForegroundWindow(hwnd))
-        if attached_target:
-            user32.AttachThreadInput(current, target_tid, False)
-        if attached_fg:
-            user32.AttachThreadInput(current, fg_tid, False)
-        time.sleep(0.12)
-        return focused or int(user32.GetForegroundWindow() or 0) == hwnd
+        child = self._last_focus if self._last_focus and user32.IsWindow(self._last_focus) else 0
+        return _steal_foreground(hwnd, extra_focus=child)
+
+    def focus_hwnd(self, hwnd: int) -> bool:
+        if not hwnd or not user32.IsWindow(hwnd):
+            return False
+        return _steal_foreground(hwnd, extra_focus=0)
 
     def copy(self) -> None:
         self._chord("c")
@@ -84,7 +100,42 @@ class WindowInput:
         time.sleep(0.08)
 
 
+def _steal_foreground(hwnd: int, *, extra_focus: int) -> bool:
+    user32.ShowWindow(hwnd, _SW_RESTORE)
+    user32.AllowSetForegroundWindow(_ASFW_ANY)
+    current = int(kernel32.GetCurrentThreadId())
+    target_tid = _thread_of(hwnd)
+    extra_tid = _thread_of(extra_focus) if extra_focus else 0
+    foreground = int(user32.GetForegroundWindow() or 0)
+    fg_tid = _thread_of(foreground) if foreground else 0
+    attached: list[int] = []
+    for tid in (fg_tid, target_tid, extra_tid):
+        if tid and tid != current and tid not in attached:
+            if user32.AttachThreadInput(current, tid, True):
+                attached.append(tid)
+    user32.BringWindowToTop(hwnd)
+    focused = bool(user32.SetForegroundWindow(hwnd))
+    if extra_focus:
+        user32.SetFocus(extra_focus)
+    for tid in attached:
+        user32.AttachThreadInput(current, tid, False)
+    time.sleep(0.08)
+    now = int(user32.GetForegroundWindow() or 0)
+    return focused or now == hwnd or (extra_focus != 0 and now == extra_focus)
+
+
+def _focused_control(hwnd: int) -> int:
+    info = _GUITHREADINFO()
+    if not user32.GetGUIThreadInfo(_thread_of(hwnd), ctypes.byref(info)):
+        return hwnd
+    focus = int(info.hwndFocus or 0)
+    caret = int(info.hwndCaret or 0)
+    return focus or caret or hwnd
+
+
 def _thread_of(hwnd: int) -> int:
+    if not hwnd:
+        return 0
     pid = wintypes.DWORD()
     return int(user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid)))
 

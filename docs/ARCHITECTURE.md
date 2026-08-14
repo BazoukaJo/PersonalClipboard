@@ -18,6 +18,7 @@ Type field (focused only) → debounce → LLM worker complete → grey ghost; T
 Quiet (app VAD, Mic ON) → stop stream + idle CUDA; short probe wakes on speech
 Enable switch OFF → stop stream, stop probe, idle ASR (no wake)
 Ctrl+Shift+A → LLM worker (dictation prompt) → QClipboard
+Ctrl+Shift+R → Type field; again → last other-app text field
 ```
 
 ## 2. Threads
@@ -106,7 +107,8 @@ No pyannote on the hot path.
 - Ambient: commit → (optional) Ollama → `QClipboard.setText`.
 - Type field: while focused, debounce → same Ollama model as a **continuation** (not a rewrite). Grey ghost; Tab inserts. Escape clears. Never on ASR partials or Meeting Record.
 - `Ctrl+Shift+A`: read clipboard → Ollama with the dictation system prompt → write back. Independent of enable.
-- Register the hotkey with `pynput` (global). `QShortcut` only works when the overlay is focused.
+- `Ctrl+Shift+R`: focus the Type field. If it already has focus, restore the last foreign window's focused control (Explorer included). Poll records `GetForegroundWindow` + `GetGUIThreadInfo` hwndFocus while the overlay is not foreground.
+- Register hotkeys with `pynput` (global). `QShortcut` only works when the overlay is focused.
 - One process only. A new launch asks the running instance to quit (CUDA unload), then binds the instance socket. If the old process hangs, it is terminated.
 
 ## 9. Meeting notes
@@ -130,7 +132,7 @@ Meeting Record uses the same ASR worker with VoiceGate lock off and voice comman
 | `ui/predict_edit.py` | Type field ghost + Tab accept |
 | `ui/settings_panel.py` | Language, opacity, models, VAD, type-ahead toggle |
 | `ui/i18n.py` | en / fr / es / de HUD strings |
-| `hotkeys/bindings.py` | `Ctrl+Shift+A` |
+| `hotkeys/bindings.py` | `Ctrl+Shift+A`, `Ctrl+Shift+R` |
 | `modes/ambient.py` | Prose correction prompt |
 | `modes/complete.py` | Type-ahead continuation prompt |
 | `notes/meeting.py` | Desktop markdown meeting notes |

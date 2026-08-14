@@ -19,3 +19,4 @@ class UiBridge(QObject):
     vad_wake = pyqtSignal()
     ollama_models = pyqtSignal(object)
     predicted = pyqtSignal(str, str)
+    type_focus_requested = pyqtSignal()

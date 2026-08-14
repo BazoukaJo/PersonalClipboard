@@ -29,6 +29,7 @@ def about_body() -> str:
         "Correction runs on Ollama at 127.0.0.1 only.\n\n"
         "Finish a spoken or typed phrase with a period to correct and copy.\n"
         "In Type, Tab accepts the grey suggestion while that field is focused.\n"
+        "Ctrl+Shift+R focuses Type; press again to return to the other app.\n"
         "Say paste last, copy last, or correct last.\n"
         "Ctrl+Shift+A reformats the current clipboard.\n"
         "Record meeting transcribes the room and saves notes on the desktop.\n"

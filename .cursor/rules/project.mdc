@@ -13,6 +13,7 @@ Local Windows dictation overlay. Audio, transcripts, clipboard, and LLM stay on 
 - Never send partial ASR hypotheses to Ollama. Correct on sentence commit or `Ctrl+Shift+A` only. Type-field ghost completion may use the same localhost model while that field is focused (Tab accepts).
 - Default models: Faster-Whisper `large-v3-turbo` FP16 on CUDA; `qwen2.5-coder:1.5b` for correction so the 16 GB card keeps headroom.
 - `Ctrl+Shift+A` reformats the current clipboard (works with capture off).
+- `Ctrl+Shift+R` focuses Type; again returns focus to the last other-app text field (Explorer included).
 - Do not persist microphone audio unless an explicit debug flag is on; never commit recordings.
 
 See `AGENTS.md` and `docs/ARCHITECTURE.md`.

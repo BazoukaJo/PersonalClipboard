@@ -68,7 +68,11 @@ class PersonalClipboardApp(QObject):
         if clipboard is None:
             raise RuntimeError("Qt clipboard is unavailable")
         self._clipboard = ClipboardService(clipboard)
-        self._hotkeys = GlobalHotkeys(settings, self._bridge.reformat_requested.emit)
+        self._hotkeys = GlobalHotkeys(
+            settings,
+            self._bridge.reformat_requested.emit,
+            self._bridge.type_focus_requested.emit,
+        )
         self._windows = WindowInput()
         self._last_ready = ""
         self._commit_source = "audio"
@@ -127,6 +131,7 @@ class PersonalClipboardApp(QObject):
         _queue(self._bridge.vad_wake, self._leave_vad_idle, queued)
         _queue(self._bridge.ollama_models, self._fill_settings, queued)
         _queue(self._bridge.predicted, self._on_predicted, queued)
+        _queue(self._bridge.type_focus_requested, self._on_type_focus, queued)
         self._overlay.enable_toggled.connect(self._set_capture)
         self._overlay.hide_requested.connect(self._overlay.hide)
         self._overlay.copy_requested.connect(self._copy_ready)
@@ -183,6 +188,18 @@ class PersonalClipboardApp(QObject):
     def _show_overlay(self) -> None:
         self._overlay.show()
         self._overlay.raise_()
+
+    def _on_type_focus(self) -> None:
+        if self._overlay.type_field_active():
+            if self._windows.focus_last_foreign():
+                self._overlay.release_type_field()
+                return
+            self._overlay.set_message("Click another app's field, then Ctrl+Shift+R.")
+            return
+        self._show_overlay()
+        hwnd = int(self._overlay.winId())
+        self._windows.focus_hwnd(hwnd)
+        self._overlay.focus_type_field()
 
     def _place_overlay(self, qt: QApplication) -> None:
         screen = qt.primaryScreen()

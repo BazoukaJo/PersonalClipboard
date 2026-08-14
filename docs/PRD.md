@@ -55,6 +55,7 @@ Single local user on this PC.
 - FR-L4: Committed + corrected text is written with `QClipboard` (Qt).
 - FR-L5: `Ctrl+Shift+A` is a **global** hotkey (`pynput`); Qt shortcuts are insufficient.
 - FR-L6: While the Type field is focused (and Meeting Record is off), the same localhost model may suggest a short continuation as grey ghost text. Tab inserts it. ASR partials never use this path.
+- FR-L7: `Ctrl+Shift+R` is a **global** hotkey. It focuses Type. If Type is already focused, restore the last text field in another app or Explorer.
 
 ### 4.4 Overlay
 

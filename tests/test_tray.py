@@ -8,6 +8,7 @@ def test_about_identifies_the_app() -> None:
     assert "127.0.0.1" in body
     assert "paste last" in body
     assert "tab" in body
+    assert "ctrl+shift+r" in body
 
 
 def test_restart_uses_exe_or_module() -> None:

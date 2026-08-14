@@ -17,12 +17,19 @@ class FakeWindows:
         self.can_focus = True
         self.paste_calls = 0
         self.copy_calls = 0
+        self.foreign_calls = 0
+        self.hwnd_calls: list[int] = []
 
     def poll(self) -> None:
         return None
 
     def focus_last_foreign(self) -> bool:
+        self.foreign_calls += 1
         return self.can_focus
+
+    def focus_hwnd(self, hwnd: int) -> bool:
+        self.hwnd_calls.append(hwnd)
+        return True
 
     def paste(self) -> None:
         self.paste_calls += 1
@@ -249,3 +256,27 @@ def test_worker_thread_model_ready_enables_mic(pc_app, qapp) -> None:
             break
         time.sleep(0.02)
     assert pc_app._overlay._enable.isEnabled()
+
+
+def test_type_hotkey_focuses_type_when_idle(pc_app, qapp) -> None:
+    pc_app._overlay.show()
+    pc_app._overlay.release_type_field()
+    qapp.processEvents()
+    pc_app._on_type_focus()
+    qapp.processEvents()
+    assert pc_app._windows.hwnd_calls
+    assert pc_app._windows.foreign_calls == 0
+
+
+def test_type_hotkey_returns_to_other_app_when_type_focused(pc_app, monkeypatch) -> None:
+    monkeypatch.setattr(pc_app._overlay, "type_field_active", lambda: True)
+    pc_app._on_type_focus()
+    assert pc_app._windows.foreign_calls == 1
+
+
+def test_type_hotkey_stays_when_no_other_app(pc_app, monkeypatch) -> None:
+    monkeypatch.setattr(pc_app._overlay, "type_field_active", lambda: True)
+    pc_app._windows.can_focus = False
+    pc_app._on_type_focus()
+    assert pc_app._windows.foreign_calls == 1
+    assert pc_app._overlay._status.text()

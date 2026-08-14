@@ -68,6 +68,7 @@ Full CUDA / cuDNN notes: [docs/SETUP.md](docs/SETUP.md).
 | Speak, end with `.` `?` `!` | Corrected sentence → clipboard. Paste with Ctrl+V. |
 | Type, then Enter or `.` `?` `!` | Same correct-and-copy path. |
 | Type, **Tab** (field focused) | Insert the grey suggestion from the local corrector. |
+| **Ctrl+Shift+R** | Focus Type. Press again to return to the last text field in another app or Explorer. |
 | **Copy** | Puts the last finished sentence on the clipboard again. |
 | Say **paste last** | Focuses the last other window and pastes. |
 | Say **copy last** | Copies the selection from the last other window. |

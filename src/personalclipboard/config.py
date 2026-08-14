@@ -55,6 +55,7 @@ class Settings:
     ollama_model: str = "qwen2.5-coder:1.5b"
     ollama_timeout_s: float = 8.0
     hotkey: str = "<ctrl>+<shift>+a"
+    type_hotkey: str = "<ctrl>+<shift>+r"
     persist_audio: bool = False  # debug WAV only; never default on
     preferred_input: str = "maono"
     ring_seconds: float = 8.0

@@ -34,6 +34,7 @@ _EN = {
     "meet_hint": "Meeting transcript appears here.",
     "meet_tip": (
         "Transcribe this room and save notes to the desktop. "
+        "Captures the microphone and what you hear on speakers or headphones. "
         "Speech goes to the file, not the clipboard."
     ),
     "mic_tip": "Off stops the microphone.",
@@ -90,7 +91,10 @@ _FR = {
     "empty": "Prêt à coller",
     "type_hint": "Saisissez, Tab pour accepter, puis Entrée ou un point.",
     "meet_hint": "La transcription apparaît ici.",
-    "meet_tip": "Transcrit la pièce et enregistre des notes sur le bureau. Pas de presse-papiers.",
+    "meet_tip": (
+        "Transcrit la pièce (micro et son des haut-parleurs ou du casque) "
+        "et enregistre des notes sur le bureau. Pas de presse-papiers."
+    ),
     "mic_tip": "Désactivé arrête le microphone.",
     "history_tip": "Affiche l’historique. Copiez n’importe quelle entrée.",
     "history_empty": "Aucun historique pour le moment.",
@@ -144,7 +148,10 @@ _ES = {
     "empty": "Listo para pegar",
     "type_hint": "Escriba, Tab para aceptar, luego Enter o un punto.",
     "meet_hint": "La transcripción aparece aquí.",
-    "meet_tip": "Transcribe la sala y guarda notas en el escritorio. No usa el portapapeles.",
+    "meet_tip": (
+        "Transcribe la sala (micrófono y audio de altavoces o auriculares) "
+        "y guarda notas en el escritorio. No usa el portapapeles."
+    ),
     "mic_tip": "Desactivado detiene el micrófono.",
     "history_tip": "Muestra el historial. Copie cualquier entrada.",
     "history_empty": "Aún no hay historial.",
@@ -199,8 +206,8 @@ _DE = {
     "type_hint": "Tippen, Tab zum Übernehmen, dann Enter oder Punkt.",
     "meet_hint": "Transkript erscheint hier.",
     "meet_tip": (
-        "Transkribiert den Raum und speichert Notizen auf dem Desktop. "
-        "Nicht in die Zwischenablage."
+        "Transkribiert den Raum (Mikrofon und Lautsprecher oder Kopfhörer) "
+        "und speichert Notizen auf dem Desktop. Nicht in die Zwischenablage."
     ),
     "mic_tip": "Aus stoppt das Mikrofon.",
     "history_tip": "Zeigt den Verlauf. Kopieren Sie jeden Eintrag.",

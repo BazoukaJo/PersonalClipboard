@@ -1,1 +1,1 @@
-"""WASAPI capture via PyAudio."""
+"""WASAPI capture via PyAudio, plus meeting-only speaker loopback."""

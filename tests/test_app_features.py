@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QLabel
 
 from personalclipboard.app import PersonalClipboardApp
 from personalclipboard.clipboard.history import ClipboardHistory
-from personalclipboard.config import Settings
+from personalclipboard.config import Settings, load_settings, save_settings as write_settings
 
 
 class FakeWindows:
@@ -44,12 +44,18 @@ class FakeWindows:
 def pc_app(qapp, monkeypatch, tmp_path):
     monkeypatch.setattr("personalclipboard.clipboard.service.play_copy_cue", lambda: None)
     monkeypatch.setattr("personalclipboard.app.play_copy_cue", lambda: None)
+    settings_file = tmp_path / "settings.json"
+    monkeypatch.setattr(
+        "personalclipboard.app.save_settings",
+        lambda settings, path=None: write_settings(settings, settings_file),
+    )
     settings = Settings()
     history = ClipboardHistory(tmp_path / "history.txt", threaded=False)
     app = PersonalClipboardApp(qapp, settings, start_background=False, history=history)
     submitted: list[str] = []
     app._llm.submit = lambda text, **_kwargs: submitted.append(text) or 1
     app.submitted = submitted  # type: ignore[attr-defined]
+    app.settings_file = settings_file  # type: ignore[attr-defined]
     fake = FakeWindows()
     app._windows = fake  # type: ignore[assignment]
     app._probe.start = lambda: None
@@ -57,7 +63,10 @@ def pc_app(qapp, monkeypatch, tmp_path):
     app._capture.start = lambda: None
     app._capture.stop = lambda: None
     app._capture.close = lambda: None
+    app._capture.start_loopback = lambda: True
+    app._capture.stop_loopback = lambda: None
     app._capture.device_name = "fake-mic"
+    app._capture.loopback_name = "fake-speakers"
     app._capture.backend = "pyaudio"
     app._asr.start = lambda: None
     app._asr.stop = lambda: None
@@ -243,6 +252,44 @@ def test_settings_opacity_and_vad(pc_app) -> None:
     assert pc_app._settings.overlay_opacity == 60
     pc_app._on_vad_changed(False)
     assert pc_app._settings.vad_enabled is False
+    loaded = load_settings(pc_app.settings_file)
+    assert loaded.overlay_opacity == 60
+    assert loaded.vad_enabled is False
+
+
+def test_overlay_geometry_restored(pc_app, qapp) -> None:
+    height = max(pc_app._overlay.height(), 220)
+    pc_app._settings.overlay_x = 40
+    pc_app._settings.overlay_y = 50
+    pc_app._settings.overlay_w = 560
+    pc_app._settings.overlay_h = height
+    pc_app._place_overlay(qapp)
+    geo = pc_app._overlay.geometry()
+    assert geo.x() == 40
+    assert geo.y() == 50
+    assert geo.width() == 560
+    assert geo.height() == height
+
+
+def test_overlay_geometry_falls_back_when_unset(pc_app, qapp) -> None:
+    pc_app._settings.overlay_w = 0
+    pc_app._settings.overlay_h = 0
+    pc_app._place_overlay(qapp)
+    screen = qapp.primaryScreen()
+    assert screen is not None
+    geo = screen.availableGeometry()
+    assert pc_app._overlay.y() == geo.y() + 24
+
+
+def test_shutdown_persists_overlay_geometry(pc_app) -> None:
+    pc_app._overlay.move(32, 48)
+    expected = pc_app._overlay.compact_geometry()
+    pc_app.shutdown()
+    loaded = load_settings(pc_app.settings_file)
+    assert loaded.overlay_x == expected.x()
+    assert loaded.overlay_y == expected.y()
+    assert loaded.overlay_w == expected.width()
+    assert loaded.overlay_h == expected.height()
 
 
 def test_mic_off_is_privacy_kill_switch(pc_app) -> None:
@@ -353,3 +400,17 @@ def test_cycle_hidden_during_meeting(pc_app, tmp_path: Path, monkeypatch) -> Non
     pc_app._start_meeting()
     assert not pc_app._overlay._audio_cycle.isVisible()
     pc_app._stop_meeting(restore_mic=False)
+
+
+def test_meeting_starts_and_stops_speaker_loopback(pc_app, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("personalclipboard.app.desktop_directory", lambda: tmp_path)
+    calls: list[str] = []
+    pc_app._capture.start_loopback = lambda: calls.append("start") or True
+    pc_app._capture.stop_loopback = lambda: calls.append("stop")
+    pc_app._start_meeting()
+    assert pc_app._meeting is not None
+    assert calls == ["start"]
+    notes = (tmp_path / pc_app._meeting.filename).read_text(encoding="utf-8")
+    assert "fake-speakers" in notes
+    pc_app._stop_meeting(restore_mic=False)
+    assert calls == ["start", "stop"]

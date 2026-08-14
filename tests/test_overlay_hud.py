@@ -213,3 +213,14 @@ def test_type_clear_and_output_cycle_controls(qapp) -> None:
     assert overlay._audio_cycle.isVisible()
     assert not overlay._audio_cycle.isEnabled()
     overlay.close()
+
+
+def test_compact_geometry_ignores_settings_open_height(qapp) -> None:
+    overlay = Overlay()
+    overlay.resize(520, 280)
+    overlay._settings_closed_size = overlay.size()
+    overlay.settings._open = True
+    box = overlay.compact_geometry()
+    assert box.width() == 520
+    assert box.height() == 280
+    overlay.close()

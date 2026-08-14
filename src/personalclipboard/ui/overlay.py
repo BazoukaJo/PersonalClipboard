@@ -10,6 +10,7 @@ from PyQt6.QtGui import (
     QFont,
     QFontMetrics,
     QMouseEvent,
+    QMoveEvent,
     QPainter,
     QPaintEvent,
     QPen,
@@ -91,6 +92,7 @@ class Overlay(QWidget):
     meeting_toggled = pyqtSignal(bool)
     prediction_requested = pyqtSignal(str)
     retry_requested = pyqtSignal()
+    geometry_changed = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -301,9 +303,21 @@ class Overlay(QWidget):
         local = self.mapFromGlobal(QPoint(global_x, global_y))
         return resize_hit(local.x(), local.y(), self.width(), self.height())
 
+    def compact_geometry(self) -> QRect:
+        """Collapsed HUD box. Settings-open height is not a session size."""
+        closed = self._settings_closed_size
+        if self.settings.is_expanded() and closed is not None:
+            return QRect(self.x(), self.y(), closed.width(), closed.height())
+        return QRect(self.x(), self.y(), self.width(), self.height())
+
+    def moveEvent(self, a0: QMoveEvent | None) -> None:
+        super().moveEvent(a0)
+        self.geometry_changed.emit()
+
     def resizeEvent(self, a0: QResizeEvent | None) -> None:
         super().resizeEvent(a0)
         self._refresh_elides()
+        self.geometry_changed.emit()
 
     def show_partial(self, text: str) -> None:
         preview = live_preview(text)
@@ -847,7 +861,8 @@ def _meeting_panel(
     pointing(button)
     button.setToolTip(
         "Transcribe this room and save notes to the desktop. "
-        "Speech goes to the file, not the clipboard. Use speakers for other voices."
+        "Captures the microphone and what you hear on speakers or headphones. "
+        "Speech goes to the file, not the clipboard."
     )
     top = QHBoxLayout()
     top.setContentsMargins(0, 0, 0, 0)

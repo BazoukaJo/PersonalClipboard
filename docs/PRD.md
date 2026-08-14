@@ -1,6 +1,6 @@
 # PersonalClipboard — Product Requirements Document
 
-**Status:** v0.1 live dictation overlay (Windows).  
+**Status:** v0.2 live dictation overlay (Windows).  
 **Platform:** Windows 10/11  
 **Hardware target:** Intel Core i9-14900K, NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)  
 **Privacy:** fully local; no cloud services
@@ -63,7 +63,7 @@ Single local user on this PC.
 - FR-U2: Shows partial hypothesis, last commit, and status `listening | quiet | uncertain | locked | off`.
 - FR-U3: Enable switch is visible and reachable without focusing another app.
 - FR-U4: Only one process. A new launch (desktop shortcut to the exe, tray Restart, or `pythonw -m`) stops the previous instance, then starts fresh.
-- FR-U5: HUD Settings: UI language, overlay opacity, Whisper model, Ollama model, VAD idle toggle, type-ahead toggle. Persist under LOCALAPPDATA.
+- FR-U5: HUD Settings: UI language, overlay opacity, Whisper model, Ollama model, VAD idle toggle, type-ahead toggle, overlay position and size. Persist under LOCALAPPDATA. Mic enable is not persisted.
 
 ### 4.5 Cacophony
 
@@ -75,7 +75,7 @@ Single local user on this PC.
 
 - FR-M1: Record transcribes the room to `Desktop/Meeting YYYY-MM-DD HHMM.md`.
 - FR-M2: While recording, spoken commits do not write the clipboard. Copy is disabled.
-- FR-M3: Do not write WAV. Headset / remote speakers are not captured without loopback (known gap).
+- FR-M3: Do not write WAV. Meeting Record mixes the microphone with WASAPI loopback of speaker/headphone output. Dictation stays microphone-only.
 
 ## 5. Non-functional requirements
 
@@ -124,4 +124,4 @@ Single local user on this PC.
 
 ## 8. Out of scope (v0.1)
 
-Cloud STT/LLM, telemetry, WAV persistence, WASAPI loopback for meeting playback, Continue/VS Code as a runtime. See `docs/SETUP.md` for install.
+Cloud STT/LLM, telemetry, WAV persistence, Continue/VS Code as a runtime. See `docs/SETUP.md` for install.

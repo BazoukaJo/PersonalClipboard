@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime
 
-from PyQt6.QtCore import QObject, Qt, QTimer
+from PyQt6.QtCore import QObject, QRect, Qt, QTimer
 from PyQt6.QtGui import QAction, QScreen
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -23,6 +23,7 @@ from personalclipboard.config import (
     history_path,
     load_settings,
     save_settings,
+    saved_overlay_rect,
 )
 from personalclipboard.hotkeys.bindings import GlobalHotkeys
 from personalclipboard.llm.corrector import Corrector
@@ -40,6 +41,11 @@ from personalclipboard.windows.input import WindowInput
 def _queue(signal: object, slot: object, queued: Qt.ConnectionType) -> None:
     """QueuedConnection: worker emits must not run Qt slots on the worker thread."""
     getattr(signal, "connect")(slot, queued)
+
+
+def _visible_on_screens(qt: QApplication, x: int, y: int, width: int, height: int) -> bool:
+    rect = QRect(x, y, width, height)
+    return any(screen.availableGeometry().intersects(rect) for screen in qt.screens())
 
 
 class PersonalClipboardApp(QObject):
@@ -68,6 +74,7 @@ class PersonalClipboardApp(QObject):
             on_command=self._bridge.command.emit,
             on_vad_idle=self._bridge.vad_idle.emit,
         )
+        self._asr.set_loop_ring(self._capture.loop_ring)
         self._corrector = Corrector(settings)
         self._llm = LlmWorker(
             self._corrector,
@@ -104,6 +111,10 @@ class PersonalClipboardApp(QObject):
         self._focus_timer.setInterval(200)
         self._focus_timer.timeout.connect(self._windows.poll)
         self._focus_timer.start()
+        self._persist_timer = QTimer(self)
+        self._persist_timer.setSingleShot(True)
+        self._persist_timer.setInterval(400)
+        self._persist_timer.timeout.connect(self._persist_settings)
         self._prepare_overlay(qt)
         self._fill_settings([])
         self._booting = False
@@ -160,6 +171,7 @@ class PersonalClipboardApp(QObject):
         panel.ollama_changed.connect(self._on_ollama_changed)
         panel.vad_changed.connect(self._on_vad_changed)
         panel.predict_changed.connect(self._on_predict_changed)
+        self._overlay.geometry_changed.connect(self._schedule_persist)
 
     def _emit_corrected(self, _jid: int, text: str) -> None:
         self._bridge.corrected.emit(text)
@@ -220,14 +232,19 @@ class PersonalClipboardApp(QObject):
         screen = qt.primaryScreen()
         if screen is None:
             return
-        geo = screen.availableGeometry()
-        hint = self._overlay.sizeHint()
-        width = min(max(520, hint.width()), geo.width())
-        height = min(max(hint.height(), self._overlay.minimumHeight()), geo.height())
-        self._overlay.resize(width, height)
-        x = geo.x() + (geo.width() - self._overlay.width()) // 2
-        y = geo.y() + 24
-        self._overlay.move(x, y)
+        saved = saved_overlay_rect(self._settings)
+        if saved is not None and _visible_on_screens(qt, *saved):
+            self._overlay.setGeometry(*saved)
+            self._overlay.clamp_to_screen()
+        else:
+            geo = screen.availableGeometry()
+            hint = self._overlay.sizeHint()
+            width = min(max(520, hint.width()), geo.width())
+            height = min(max(hint.height(), self._overlay.minimumHeight()), geo.height())
+            self._overlay.resize(width, height)
+            x = geo.x() + (geo.width() - self._overlay.width()) // 2
+            y = geo.y() + 24
+            self._overlay.move(x, y)
         self._watch_screens(qt)
 
     def _watch_screens(self, qt: QApplication) -> None:
@@ -455,12 +472,17 @@ class PersonalClipboardApp(QObject):
             owned = True
             self._overlay.set_enable_checked(True)
         self._capture.ring.clear()
+        self._capture.loop_ring.clear()
+        loop_ok = self._capture.start_loopback()
         self._asr.set_meeting_mode(True)
         source = self._capture.device_name or "microphone"
+        if loop_ok and self._capture.loopback_name:
+            source = f"{source} + {self._capture.loopback_name}"
         try:
             notes = MeetingNotes(desktop_directory(), datetime.now(), source)
         except OSError as exc:
             self._asr.set_meeting_mode(False)
+            self._capture.stop_loopback()
             if owned:
                 self._overlay.set_enable_checked(False)
                 self._set_capture(False)
@@ -470,15 +492,23 @@ class PersonalClipboardApp(QObject):
         self._meeting_owned_capture = owned
         self._overlay.set_meeting_recording(True, notes.filename)
         self._overlay.set_status("recording")
-        self._overlay.set_message(
-            f"Recording on {source}. Notes save to the desktop as {notes.filename}."
-        )
+        if loop_ok:
+            self._overlay.set_message(
+                f"Recording microphone and speakers on {source}. "
+                f"Notes save to the desktop as {notes.filename}."
+            )
+        else:
+            self._overlay.set_message(
+                f"Recording microphone only on {source} "
+                f"(speaker capture unavailable). Notes save as {notes.filename}."
+            )
 
     def _stop_meeting(self, *, restore_mic: bool = True) -> None:
         notes = self._meeting
         self._meeting = None
         leftover = self._asr.flush_remainder()
         self._asr.set_meeting_mode(False)
+        self._capture.stop_loopback()
         saved = ""
         if notes is not None:
             if leftover:
@@ -531,11 +561,29 @@ class PersonalClipboardApp(QObject):
                 return
             self._overlay.set_status("listening")
 
+    def _schedule_persist(self) -> None:
+        if self._booting or self._stopped:
+            return
+        self._persist_timer.start()
+
+    def _store_overlay_geometry(self) -> None:
+        box = self._overlay.compact_geometry()
+        self._settings.overlay_x = box.x()
+        self._settings.overlay_y = box.y()
+        self._settings.overlay_w = box.width()
+        self._settings.overlay_h = box.height()
+
+    def _persist_settings(self) -> None:
+        if self._stopped:
+            return
+        self._store_overlay_geometry()
+        save_settings(self._settings)
+
     def _on_language_changed(self, lang: str) -> None:
         if self._booting:
             return
         self._settings.ui_language = lang
-        save_settings(self._settings)
+        self._persist_settings()
 
     def _open_history(self) -> None:
         dialog = HistoryDialog(
@@ -556,13 +604,13 @@ class PersonalClipboardApp(QObject):
         if self._booting:
             return
         self._settings.overlay_opacity = max(OPACITY_MIN, min(OPACITY_MAX, percent))
-        save_settings(self._settings)
+        self._persist_settings()
 
     def _on_whisper_changed(self, name: str) -> None:
         if self._booting or name == self._settings.whisper_model:
             return
         self._settings.whisper_model = name
-        save_settings(self._settings)
+        self._persist_settings()
         resume = self._want_mic
         self._start_mic_on_ready = resume
         self._set_capture(False)
@@ -574,7 +622,7 @@ class PersonalClipboardApp(QObject):
         if self._booting:
             return
         self._settings.ollama_model = name
-        save_settings(self._settings)
+        self._persist_settings()
         threading.Thread(
             target=self._corrector.ensure_loaded, name="ollama-load", daemon=True
         ).start()
@@ -583,7 +631,7 @@ class PersonalClipboardApp(QObject):
         if self._booting:
             return
         self._settings.vad_enabled = enabled
-        save_settings(self._settings)
+        self._persist_settings()
         if not enabled and self._vad_sleeping:
             self._leave_vad_idle()
 
@@ -591,7 +639,7 @@ class PersonalClipboardApp(QObject):
         if self._booting:
             return
         self._settings.predict_enabled = enabled
-        save_settings(self._settings)
+        self._persist_settings()
         self._overlay.set_predict_enabled(enabled)
 
     def _on_prediction_requested(self, prefix: str) -> None:
@@ -611,19 +659,26 @@ class PersonalClipboardApp(QObject):
 
     def _fill_settings(self, models: object) -> None:
         names = [str(item) for item in models] if isinstance(models, list) else []
-        self._overlay.settings.set_values(
-            language=self._settings.ui_language,
-            opacity=self._settings.overlay_opacity,
-            whisper=self._settings.whisper_model,
-            ollama=self._settings.ollama_model,
-            ollama_models=names,
-            vad=self._settings.vad_enabled,
-            predict=self._settings.predict_enabled,
-        )
+        was_booting = self._booting
+        self._booting = True
+        try:
+            self._overlay.settings.set_values(
+                language=self._settings.ui_language,
+                opacity=self._settings.overlay_opacity,
+                whisper=self._settings.whisper_model,
+                ollama=self._settings.ollama_model,
+                ollama_models=names,
+                vad=self._settings.vad_enabled,
+                predict=self._settings.predict_enabled,
+            )
+        finally:
+            self._booting = was_booting
 
     def shutdown(self) -> None:
         if self._stopped:
             return
+        self._persist_timer.stop()
+        self._persist_settings()
         self._stopped = True
         if self._meeting is not None:
             self._stop_meeting(restore_mic=False)

@@ -32,7 +32,7 @@ def about_body() -> str:
         "Ctrl+Shift+R focuses Type; press again to return to the other app.\n"
         "Say paste last, copy last, or correct last.\n"
         "Ctrl+Shift+A reformats the current clipboard.\n"
-        "Record meeting transcribes the room and saves notes on the desktop.\n"
+        "Record meeting transcribes microphone and speaker audio to notes on the desktop.\n"
         "Starting the app again replaces the running overlay.\n\n"
         "Uncheck Mic to idle the microphone."
     )

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "personalclipboard"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local always-on clipboard intelligence: CUDA Faster-Whisper, Ollama, PyQt6 overlay."
 readme = "README.md"
 requires-python = ">=3.11"

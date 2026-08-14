@@ -27,9 +27,11 @@ OLLAMA_CHOICES = (
 OPACITY_MIN = 60
 OPACITY_MAX = 100
 OPACITY_DEFAULT = 80
+OVERLAY_MIN_W = 440
+OVERLAY_MIN_H = 220
 
-# HUD prefs only. Mic enable is never written — each launch starts capture-off
-# until Whisper is ready, then the overlay turns Mic on.
+# HUD prefs and overlay placement. Mic enable is never written — each launch
+# starts capture-off until Whisper is ready, then the overlay turns Mic on.
 _PERSIST = (
     "ui_language",
     "overlay_opacity",
@@ -38,6 +40,10 @@ _PERSIST = (
     "vad_enabled",
     "vad_silence_ms",
     "predict_enabled",
+    "overlay_x",
+    "overlay_y",
+    "overlay_w",
+    "overlay_h",
 )
 
 
@@ -74,6 +80,10 @@ class Settings:
     vad_silence_ms: int = 1500
     predict_enabled: bool = True
     predict_timeout_s: float = 3.0
+    overlay_x: int = 0
+    overlay_y: int = 0
+    overlay_w: int = 0
+    overlay_h: int = 0
 
 
 def default_settings() -> Settings:
@@ -108,7 +118,20 @@ def load_settings(path: Path | None = None) -> Settings:
         settings.whisper_model = "large-v3-turbo"
     if not isinstance(settings.ollama_model, str) or not settings.ollama_model.strip():
         settings.ollama_model = "qwen2.5:1.5b"
+    settings.overlay_x = _clamp_int(settings.overlay_x, -100_000, 100_000, 0)
+    settings.overlay_y = _clamp_int(settings.overlay_y, -100_000, 100_000, 0)
+    settings.overlay_w = _clamp_int(settings.overlay_w, 0, 10_000, 0)
+    settings.overlay_h = _clamp_int(settings.overlay_h, 0, 10_000, 0)
     return settings
+
+
+def saved_overlay_rect(settings: Settings) -> tuple[int, int, int, int] | None:
+    """Last collapsed HUD box, or None on first launch / corrupt size."""
+    width = settings.overlay_w
+    height = settings.overlay_h
+    if width < OVERLAY_MIN_W or height < OVERLAY_MIN_H:
+        return None
+    return (settings.overlay_x, settings.overlay_y, width, height)
 
 
 def _clamp_int(value: object, low: int, high: int, default: int) -> int:

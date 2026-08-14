@@ -28,7 +28,7 @@ Type field (focused) → Ollama continuation → Tab accepts
 Quiet (VAD) → stop stream + idle ASR; probe bursts wake capture
 Ctrl+Shift+A → Ollama (dictation prompt) → clipboard
 Ctrl+Shift+R → Type field; again → last other-app text field
-Meeting Record → same ASR → desktop markdown (no clipboard)
+Meeting Record → mic ring + WASAPI speaker loopback → mix → same ASR → desktop markdown (no clipboard)
 ```
 
 - Audio callback: copy samples only. No locks, no GPU, no Qt.
@@ -55,7 +55,7 @@ Latency targets: overlay partials **< ~400 ms**; clipboard commit **< ~1 s** aft
 | Dictation | Mic ON, sentence ending in `.` `?` `!` | Corrected prose → clipboard |
 | Type | Enter or `.` `?` `!` in the Type field | Same as dictation. Tab accepts a grey suggestion while that field is focused. `Ctrl+Shift+R` focuses Type; again returns to the other app. |
 | Reformat | `Ctrl+Shift+A` or say correct last | Rewrite of current clipboard |
-| Meeting | Record | Transcript → `Desktop/Meeting YYYY-MM-DD HHMM.md` |
+| Meeting | Record | Transcript of microphone + speaker/headphone output → `Desktop/Meeting YYYY-MM-DD HHMM.md` |
 
 ## Package layout
 

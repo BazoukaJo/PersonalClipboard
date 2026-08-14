@@ -19,6 +19,7 @@ Quiet (app VAD, Mic ON) → stop stream + idle CUDA; short probe wakes on speech
 Enable switch OFF → stop stream, stop probe, idle ASR (no wake)
 Ctrl+Shift+A → LLM worker (dictation prompt) → QClipboard
 Ctrl+Shift+R → Type field; again → last other-app text field
+Meeting Record → WASAPI loopback of speakers/headphones + mic ring → mix on ASR hop
 ```
 
 ## 2. Threads
@@ -26,7 +27,8 @@ Ctrl+Shift+R → Type field; again → last other-app text field
 | Thread | Core affinity (intent) | Allowed work | Forbidden |
 |---|---|---|---|
 | PortAudio callback | realtime | Copy PCM into ring buffer; return immediately | Locks, GPU, Qt, alloc-heavy Python |
-| ASR worker | P-core + CUDA | Window slice, Faster-Whisper, confidence gates | Qt widgets, Ollama HTTP |
+| WASAPI loopback | meeting only | Copy speaker mix into a second ring | GPU, Qt, PortAudio callback |
+| ASR worker | P-core + CUDA | Window slice, mix meeting rings, Faster-Whisper, confidence gates | Qt widgets, Ollama HTTP |
 | LLM worker | P-core (HTTP) | Localhost generate; timeout/skip stale jobs | Audio callback, CUDA Whisper, Qt widgets |
 | Qt main | UI | Overlay, tray, enable switch, clipboard write | Whisper, Ollama, blocking I/O |
 
@@ -113,15 +115,17 @@ No pyannote on the hot path.
 
 ## 9. Meeting notes
 
-Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. Commits append to a desktop markdown file. The overlay Copy control is disabled while recording.
+Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. While recording, a WASAPI loopback stream copies the default playback mix (communications endpoint first, then console) into a second ring. The ASR hop mixes that ring with the microphone window. Commits append to a desktop markdown file. Audio is not written to disk. The overlay Copy control is disabled while recording. Dictation stays microphone-only; loopback stops when Record stops or Mic turns off.
 
 ## 10. Module map
 
 | Module | Responsibility |
 |---|---|
 | `app.py` | `QApplication`, tray, start/stop workers |
-| `config.py` | Models, hop, hotkey, Ollama host, HUD language/opacity/VAD/predict (LOCALAPPDATA) |
-| `audio/capture.py` | PyAudio WASAPI → ring; `sounddevice` fallback |
+| `config.py` | Models, hop, hotkey, Ollama host, HUD language/opacity/VAD/predict/geometry (LOCALAPPDATA) |
+| `audio/capture.py` | PyAudio WASAPI → ring; `sounddevice` fallback; meeting loopback ring |
+| `audio/loopback.py` | WASAPI render-mix capture (headphones/speakers), meeting only |
+| `audio/mix.py` | Mix mic + loopback windows on the ASR thread |
 | `audio/probe.py` | Short peeks to wake capture after VAD idle |
 | `asr/engine.py` | CUDA Faster-Whisper worker |
 | `asr/vad.py` | Silence timer (`QuietIdle`) |

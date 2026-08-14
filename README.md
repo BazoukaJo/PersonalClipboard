@@ -10,10 +10,10 @@ The HUD is a translucent always-on-top tool window. **Mic** is the privacy kill 
 
 ## Download (Windows)
 
-GitHub limits each file to 2 GiB, so v0.1 is two zips. Download **both** from [v0.1.0](https://github.com/BazoukaJo/PersonalClipboard/releases/tag/v0.1.0) and unzip them into the **same** folder:
+GitHub limits each file to 2 GiB, so v0.2 is two zips. Download **both** from [v0.2.0](https://github.com/BazoukaJo/PersonalClipboard/releases/tag/v0.2.0) and unzip them into the **same** folder:
 
-1. `PersonalClipboard-0.1.0-windows-x64.zip` — app
-2. `PersonalClipboard-0.1.0-windows-x64-cuda12.zip` — CUDA 12 DLLs (`_internal\nvidia`)
+1. `PersonalClipboard-0.2.0-windows-x64.zip` — app
+2. `PersonalClipboard-0.2.0-windows-x64-cuda12.zip` — CUDA 12 DLLs (`_internal\nvidia`)
 
 Then run `PersonalClipboard\PersonalClipboard.exe`.
 
@@ -73,8 +73,8 @@ Full CUDA / cuDNN notes: [docs/SETUP.md](docs/SETUP.md).
 | Say **paste last** | Focuses the last other window and pastes. |
 | Say **copy last** | Copies the selection from the last other window. |
 | Say **correct last** or **Ctrl+Shift+A** | Rewrites the current clipboard (works with Mic off). |
-| **Record** | Meeting notes on the desktop. Speech goes to the file, not the clipboard. Headset calls only hear this microphone. |
-| **Settings** | Language, opacity, Whisper model, Ollama model, idle-mic-when-quiet, suggest-while-typing. Saved in LOCALAPPDATA. |
+| **Record** | Meeting notes on the desktop. Mixes microphone and speaker/headphone audio. Speech goes to the file, not the clipboard. |
+| **Settings** | Language, opacity, Whisper model, Ollama model, idle-mic-when-quiet, suggest-while-typing, overlay size and place. Saved in LOCALAPPDATA across sessions. |
 
 Correction model: `qwen2.5:1.5b` at `http://127.0.0.1:11434`. ASR partials never go to Ollama. Type-ahead uses the same model only while the Type field is focused.
 

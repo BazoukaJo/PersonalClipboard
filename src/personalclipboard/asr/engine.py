@@ -13,6 +13,7 @@ from personalclipboard.asr.commands import match_command
 from personalclipboard.asr.vad import QuietIdle
 from personalclipboard.asr.voice_gate import VoiceGate
 from personalclipboard.audio.capture import RingBuffer
+from personalclipboard.audio.mix import mix_windows
 from personalclipboard.config import Settings
 
 
@@ -32,6 +33,7 @@ class AsrEngine:
     ) -> None:
         self._settings = settings
         self._ring = ring
+        self._loop_ring: RingBuffer | None = None
         self._on_partial = on_partial
         self._on_commit = on_commit
         self._on_status = on_status
@@ -50,6 +52,10 @@ class AsrEngine:
         self._last_command_at = 0.0
         self._meeting_mode = False
         self._state_lock = threading.Lock()
+
+    def set_loop_ring(self, ring: RingBuffer | None) -> None:
+        """Second ring mixed in during Meeting Record (speaker loopback)."""
+        self._loop_ring = ring
 
     @property
     def ready(self) -> bool:
@@ -147,9 +153,14 @@ class AsrEngine:
             return
         audio = self._ring.window_float32(self._settings.window_seconds, self._settings.sample_rate)
         min_samples = int(self._settings.sample_rate * 0.2)
+        meeting = self._meeting_mode
+        if meeting and self._loop_ring is not None:
+            loop = self._loop_ring.window_float32(
+                self._settings.window_seconds, self._settings.sample_rate
+            )
+            audio = mix_windows(audio, loop)
         if audio.size < min_samples:
             return
-        meeting = self._meeting_mode
         if meeting:
             energy = float(np.sqrt(np.mean(np.square(audio.astype(np.float64)))))
             if energy < 0.008:

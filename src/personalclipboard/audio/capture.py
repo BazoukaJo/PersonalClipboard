@@ -67,10 +67,13 @@ class AudioCapture:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self.ring = RingBuffer(settings.sample_rate, settings.ring_seconds)
+        self.loop_ring = RingBuffer(settings.sample_rate, settings.ring_seconds)
         self._pa: pyaudio.PyAudio | None = None
         self._stream: pyaudio.Stream | None = None
         self._sd_stream: Any = None
+        self._loopback: Any = None
         self.device_name: str = ""
+        self.loopback_name: str = ""
         self.backend: str = ""
 
     @property
@@ -86,6 +89,40 @@ class AudioCapture:
             return bool(self._stream.is_active())
         except Exception:
             return False
+
+    @property
+    def loopback_active(self) -> bool:
+        loop = self._loopback
+        return loop is not None and bool(getattr(loop, "active", False))
+
+    def start_loopback(self) -> bool:
+        """Capture speaker/headphone output. Meeting Record only; never persist."""
+        if self.loopback_active:
+            return True
+        from personalclipboard.audio.loopback import LoopbackCapture
+
+        capture = LoopbackCapture(self.loop_ring, self._settings.sample_rate)
+        try:
+            self.loop_ring.clear()
+            capture.start()
+        except Exception:
+            self._loopback = None
+            self.loopback_name = ""
+            return False
+        self._loopback = capture
+        self.loopback_name = capture.device_name
+        return True
+
+    def stop_loopback(self) -> None:
+        loop = self._loopback
+        self._loopback = None
+        self.loopback_name = ""
+        if loop is not None:
+            try:
+                loop.stop()
+            except Exception:
+                pass
+        self.loop_ring.clear()
 
     def start(self) -> None:
         """Open 16 kHz mono; callback writes the ring buffer only."""
@@ -106,6 +143,7 @@ class AudioCapture:
 
     def stop(self) -> None:
         """Stop the stream so the callback no longer runs (privacy kill switch)."""
+        self.stop_loopback()
         stream = self._stream
         self._stream = None
         if stream is not None:

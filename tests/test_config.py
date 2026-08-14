@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from personalclipboard.config import default_settings, load_settings
+from personalclipboard.config import (
+    default_settings,
+    load_settings,
+    save_settings,
+    saved_overlay_rect,
+)
 
 
 def test_capture_defaults_off() -> None:
@@ -45,6 +50,8 @@ def test_load_settings_recovers_from_bad_values(tmp_path: Path) -> None:
     assert loaded.vad_silence_ms == 8000
     assert loaded.whisper_model == "large-v3-turbo"
     assert loaded.ollama_keep_alive_s == 120
+    assert loaded.overlay_w == 0
+    assert saved_overlay_rect(loaded) is None
 
 
 def test_opacity_clamped_60_to_100(tmp_path: Path) -> None:
@@ -57,3 +64,44 @@ def test_opacity_clamped_60_to_100(tmp_path: Path) -> None:
     assert load_settings(path).overlay_opacity == 100
     assert shell_alpha(100) == 255
     assert shell_alpha(60) == int(255 * 0.6)
+
+
+def test_overlay_geometry_roundtrip(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    settings = load_settings(path)
+    settings.ui_language = "fr"
+    settings.overlay_opacity = 100
+    settings.whisper_model = "turbo"
+    settings.ollama_model = "llama3.2:1b"
+    settings.vad_enabled = False
+    settings.predict_enabled = False
+    settings.overlay_x = -80
+    settings.overlay_y = 40
+    settings.overlay_w = 640
+    settings.overlay_h = 360
+    settings.enable_capture = True
+    save_settings(settings, path)
+    raw = path.read_text(encoding="utf-8")
+    assert "enable_capture" not in raw
+    loaded = load_settings(path)
+    assert loaded.ui_language == "fr"
+    assert loaded.overlay_opacity == 100
+    assert loaded.whisper_model == "turbo"
+    assert loaded.ollama_model == "llama3.2:1b"
+    assert loaded.vad_enabled is False
+    assert loaded.predict_enabled is False
+    assert loaded.overlay_x == -80
+    assert loaded.overlay_y == 40
+    assert loaded.overlay_w == 640
+    assert loaded.overlay_h == 360
+    assert loaded.enable_capture is False
+    assert saved_overlay_rect(loaded) == (-80, 40, 640, 360)
+
+
+def test_saved_overlay_rect_ignores_tiny_size() -> None:
+    settings = default_settings()
+    settings.overlay_x = 10
+    settings.overlay_y = 10
+    settings.overlay_w = 200
+    settings.overlay_h = 100
+    assert saved_overlay_rect(settings) is None

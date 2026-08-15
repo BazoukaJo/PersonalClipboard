@@ -1,4 +1,4 @@
-"""Collapsible HUD settings: language, opacity, models, VAD, type-ahead."""
+"""Modal settings: language, opacity, models, VAD, type-ahead."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -26,35 +27,39 @@ from personalclipboard.config import (
     WHISPER_CHOICES,
 )
 from personalclipboard.ui.i18n import LANGS, t
-from personalclipboard.ui.theme import pointing
+from personalclipboard.ui.theme import control_chrome, pointing
 
 _ROW_H = 50
 _CONTROL_H = 36
 _LABEL_W = 100
 
 
-class SettingsPanel(QFrame):
+class SettingsPanel(QDialog):
     language_changed = pyqtSignal(str)
     opacity_changed = pyqtSignal(int)
     whisper_changed = pyqtSignal(str)
     ollama_changed = pyqtSignal(str)
     vad_changed = pyqtSignal(bool)
     predict_changed = pyqtSignal(bool)
-    expanded_changed = pyqtSignal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("settingsDock")
-        self.setProperty("active", "false")
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-        self._open = False
+        self.setObjectName("settingsDialog")
+        self.setModal(True)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setMinimumSize(460, 420)
+        self.resize(520, 480)
+        self.setStyleSheet(
+            "QDialog { background: #1a1a1c; color: #f0f0f2; }" + control_chrome()
+        )
         self._lang = "en"
         self._updating = False
         self._make_fields()
         self._style_fields()
         self._body = QWidget()
         body_layout = QVBoxLayout(self._body)
-        body_layout.setContentsMargins(4, 12, 4, 12)
+        body_layout.setContentsMargins(4, 8, 4, 8)
         body_layout.setSpacing(12)
         body_layout.addWidget(_field_row(self._lang_label, self._lang_box))
         body_layout.addWidget(
@@ -64,6 +69,7 @@ class SettingsPanel(QFrame):
         body_layout.addWidget(_field_row(self._ollama_label, self._ollama))
         body_layout.addWidget(_box_row(self._vad))
         body_layout.addWidget(_box_row(self._predict))
+        body_layout.addStretch(1)
         self._scroll = QScrollArea()
         self._scroll.setObjectName("settingsScroll")
         self._scroll.setWidgetResizable(True)
@@ -71,30 +77,28 @@ class SettingsPanel(QFrame):
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._scroll.setWidget(self._body)
-        self._scroll.setVisible(False)
-        self._scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        self._chrome = QWidget(self)
-        top = QHBoxLayout(self._chrome)
-        top.setContentsMargins(0, 0, 0, 0)
-        top.addWidget(self._header)
-        top.addStretch(1)
-        top.addWidget(self._toggle)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetDefaultConstraint)
-        layout.addWidget(self._chrome)
-        layout.addWidget(self._scroll, 0)
-        self._apply_shell(False)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(16, 14, 16, 14)
+        root.setSpacing(10)
+        root.addLayout(self._make_header())
+        root.addWidget(self._scroll, 1)
         self.retranslate("en")
+
+    def _make_header(self) -> QHBoxLayout:
+        pointing(self._close)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self._header)
+        row.addStretch(1)
+        row.addWidget(self._close)
+        return row
 
     def _make_fields(self) -> None:
         self._header = QLabel()
-        self._header.setObjectName("sectionTitle")
-        self._toggle = QPushButton()
-        self._toggle.setObjectName("ghost")
-        pointing(self._toggle)
-        self._toggle.clicked.connect(self._flip)
+        self._header.setObjectName("brand")
+        self._close = QPushButton()
+        self._close.setObjectName("ghost")
+        self._close.clicked.connect(self.accept)
         self._lang_label = QLabel()
         self._lang_label.setObjectName("fieldLabel")
         self._lang_box = QComboBox()
@@ -150,10 +154,11 @@ class SettingsPanel(QFrame):
 
     def retranslate(self, lang: str) -> None:
         self._lang = lang
+        self.setWindowTitle(t(lang, "settings"))
         self._header.setText(t(lang, "settings"))
         self._header.setToolTip(t(lang, "settings_tip"))
-        self._toggle.setText(t(lang, "hide") if self._open else t(lang, "settings"))
-        self._toggle.setToolTip(t(lang, "hide_tip" if self._open else "settings_tip"))
+        self._close.setText(t(lang, "close"))
+        self._close.setToolTip(t(lang, "close_tip"))
         self._lang_label.setText(t(lang, "language"))
         self._lang_label.setToolTip(t(lang, "language_tip"))
         self._lang_box.setToolTip(t(lang, "language_tip"))
@@ -204,99 +209,6 @@ class SettingsPanel(QFrame):
             box.addItem(current)
             box.setCurrentText(current)
         box.blockSignals(False)
-
-    def _flip(self) -> None:
-        if self._open:
-            self._open = False
-            self._scroll.setVisible(False)
-            self._release_body_height()
-            self._toggle.setText(t(self._lang, "settings"))
-            self.setProperty("active", "false")
-            self.setMinimumHeight(0)
-            self.setMaximumHeight(16777215)
-            self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-            self._apply_shell(False)
-            self.updateGeometry()
-            self.adjustSize()
-            self.expanded_changed.emit(False)
-            return
-        # Grow the overlay first (body still hidden) so Voice/Type are not squeezed.
-        self._open = True
-        self._prepare_body_open()
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        self.expanded_changed.emit(True)
-        self._apply_shell(True)
-        self._scroll.setVisible(True)
-        self._toggle.setText(t(self._lang, "hide"))
-        self.setProperty("active", "true")
-        self.updateGeometry()
-
-    def _prepare_body_open(self) -> None:
-        natural = self.natural_body_height()
-        self._body.setMinimumHeight(natural)
-        self._body.setMaximumHeight(natural)
-        self._scroll.setMinimumHeight(64)
-        self._scroll.setMaximumHeight(natural)
-
-    def _release_body_height(self) -> None:
-        self._body.setMinimumHeight(0)
-        self._body.setMaximumHeight(16777215)
-        self._scroll.setMinimumHeight(0)
-        self._scroll.setMaximumHeight(16777215)
-
-    def _apply_shell(self, opened: bool) -> None:
-        self._header.setVisible(opened)
-        self._toggle.setVisible(opened)
-        self._chrome.setVisible(opened)
-        self.setObjectName("panel" if opened else "settingsDock")
-        layout = self.layout()
-        if layout is not None:
-            if opened:
-                layout.setContentsMargins(12, 10, 12, 12)
-                layout.setSpacing(8)
-            else:
-                layout.setContentsMargins(0, 0, 0, 0)
-                layout.setSpacing(0)
-        self._polish()
-
-    def toggle(self) -> None:
-        self._flip()
-
-    def _polish(self) -> None:
-        style = self.style()
-        if style is not None:
-            style.unpolish(self)
-            style.polish(self)
-
-    def is_expanded(self) -> bool:
-        return self._open
-
-    def natural_body_height(self) -> int:
-        layout = self._body.layout()
-        spacing = 12
-        pad = 24
-        if layout is not None:
-            spacing = layout.spacing()
-            margins = layout.contentsMargins()
-            pad = margins.top() + margins.bottom()
-        return _ROW_H * 6 + spacing * 5 + pad
-
-    def extra_open_height(self) -> int:
-        # Collapsed control is only the Settings button; opening adds header + panel pad.
-        return self.natural_body_height() + 28
-
-    def adopt_open_space(self, gained: int) -> None:
-        if not self._open:
-            return
-        natural = self.natural_body_height()
-        body = min(natural, max(64, gained - 28))
-        self.setMinimumHeight(0)
-        self.setMaximumHeight(16777215)
-        self._scroll.setMinimumHeight(body)
-        self._scroll.setMaximumHeight(body)
-
-    def open_body_height(self) -> int:
-        return self.natural_body_height() if self._open else 0
 
     def _emit_language(self) -> None:
         if not self._updating:

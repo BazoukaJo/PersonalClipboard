@@ -38,8 +38,9 @@ Use `queue.Queue` or equivalent between ASR → Qt (partials/commits) and ASR �
 
 Faster-Whisper has no native partial decoder. v1 uses chunk-and-stitch:
 
-- Ring buffer holds several seconds of PCM.
-- Every **200–300 ms**, transcribe the last **~1.0 s**.
+- Ring buffer holds several seconds of PCM (16 s so record hops can fall behind).
+- Dictation: every **200–300 ms**, transcribe the last **~2.0 s**.
+- Meeting/Playback: every **~800 ms**, transcribe the last **~6.0 s**, `beam_size=3`. WASAPI loopback prefers the console (multimedia) device so YouTube plays into the same mix.
 - `condition_on_previous_text=False` to limit hallucination drift across windows.
 - Partials: `beam_size=1`. Commit (punctuation or pause / stable tail): `beam_size=3`.
 - Stitch by preferring the stable prefix of consecutive windows; emit a commit when the tail stays unchanged across hops or a pause is detected.
@@ -115,7 +116,7 @@ No pyannote on the hot path.
 
 ## 9. Meeting notes
 
-Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. While recording, a WASAPI loopback stream copies the default playback mix (communications endpoint first, then console) into a second ring. Meeting mixes that ring with the microphone window. Playback Record uses the loopback ring only (YouTube and other app audio; no microphone). Overlay **Records** lists desktop `Meeting *.md` and `Playback *.md` files; opening a row shows the full note. Commits are stitched overlapping windows, then localhost-corrected, then appended. Audio is not written to disk. The overlay Copy control is disabled while recording. Dictation stays microphone-only; loopback stops when Record stops. Mic OFF stops a meeting; playback can continue with the microphone off.
+Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. While recording, a WASAPI loopback stream copies the default playback mix (console/multimedia endpoint first, then communications) into a second ring. Meeting mixes that ring with the microphone window. Playback Record uses the loopback ring only (YouTube and other app audio; no microphone). Overlay **Records** lists desktop `Meeting *.md` and `Playback *.md` files; opening a row shows the full note. Commits are stitched overlapping windows, then localhost-corrected, then appended. Audio is not written to disk. The overlay Copy control is disabled while recording. Dictation stays microphone-only; loopback stops when Record stops. Mic OFF stops a meeting; playback can continue with the microphone off.
 
 ## 10. Module map
 
@@ -134,7 +135,7 @@ Meeting Record uses the same ASR worker with VoiceGate lock off and voice comman
 | `clipboard/service.py` | Qt clipboard read/write |
 | `ui/overlay.py` | Translucent HUD + status |
 | `ui/predict_edit.py` | Type field ghost + Tab accept |
-| `ui/settings_panel.py` | Language, opacity, models, VAD, type-ahead toggle |
+| `ui/settings_panel.py` | Modal language, opacity, models, VAD, type-ahead |
 | `ui/i18n.py` | en / fr / es / de HUD strings |
 | `hotkeys/bindings.py` | `Ctrl+Shift+A`, `Ctrl+Shift+R` |
 | `modes/ambient.py` | Human prose correction and AI reformulation prompts |

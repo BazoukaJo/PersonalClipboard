@@ -13,6 +13,7 @@ dependencies = [
     "faster-whisper",
     "PyAudio",
     "PyQt6",
+    "PyQt6-QtSvg",
     "ollama",
     "numpy",
     "pynput",
@@ -32,6 +33,9 @@ personalclipboard = "personalclipboard.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+personalclipboard = ["ui/icons/*.svg", "ui/icons/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

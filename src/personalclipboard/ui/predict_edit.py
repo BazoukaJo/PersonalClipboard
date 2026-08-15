@@ -7,6 +7,7 @@ from PyQt6.QtGui import QColor, QKeyEvent, QPaintEvent, QPainter, QResizeEvent
 from PyQt6.QtWidgets import QLineEdit, QStyle, QStyleOptionFrame, QToolButton
 
 from personalclipboard.llm.complete import should_predict
+from personalclipboard.ui.icons import icon_size, make_icon
 
 _CLEAR_SIZE = 24
 _CLEAR_MARGIN = 4
@@ -29,7 +30,9 @@ class PredictLineEdit(QLineEdit):
         self.textChanged.connect(self._on_text)
         self._clear = QToolButton(self)
         self._clear.setObjectName("iconBtn")
-        self._clear.setText("✕")
+        self._clear.setIcon(make_icon("x", 14))
+        self._clear.setIconSize(icon_size(14))
+        self._clear.setText("")
         self._clear.setAutoRaise(True)
         self._clear.setCursor(Qt.CursorShape.PointingHandCursor)
         self._clear.setFocusPolicy(Qt.FocusPolicy.NoFocus)

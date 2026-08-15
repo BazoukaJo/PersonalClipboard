@@ -16,6 +16,8 @@ from personalclipboard.audio.capture import RingBuffer
 from personalclipboard.audio.mix import mix_windows
 from personalclipboard.config import Settings
 
+_RECORD_ENERGY_MIN = 0.0015
+
 
 class AsrEngine:
     """Overlapping windows on a worker thread. Never call from PortAudio or Qt."""
@@ -141,13 +143,12 @@ class AsrEngine:
             self._thread = None
 
     def _loop(self) -> None:
-        hop_s = self._settings.hop_ms / 1000.0
         while not self._shutdown.is_set():
             if not self._enabled.wait(timeout=0.2):
                 continue
             if self._shutdown.is_set() or not self._enabled.is_set():
                 continue
-            deadline = time.perf_counter() + hop_s
+            deadline = time.perf_counter() + self._hop_seconds()
             try:
                 self._tick()
             except Exception as exc:
@@ -156,36 +157,48 @@ class AsrEngine:
             remaining = deadline - time.perf_counter()
             _idle_remaining(remaining, self._enabled, self._shutdown)
 
+    def _hop_seconds(self) -> float:
+        with self._state_lock:
+            recording = bool(self._record_mode)
+        hop_ms = self._settings.record_hop_ms if recording else self._settings.hop_ms
+        return max(hop_ms, 50) / 1000.0
+
+    def _window_seconds(self) -> float:
+        with self._state_lock:
+            recording = bool(self._record_mode)
+        if recording:
+            return max(self._settings.record_window_seconds, self._settings.window_seconds)
+        return self._settings.window_seconds
+
     def _tick(self) -> None:
         model = self._model
         if model is None or not self._enabled.is_set():
             return
-        audio = self._ring.window_float32(self._settings.window_seconds, self._settings.sample_rate)
-        min_samples = int(self._settings.sample_rate * 0.2)
+        seconds = self._window_seconds()
+        rate = self._settings.sample_rate
+        audio = self._ring.window_float32(seconds, rate)
+        min_samples = int(rate * 0.2)
         mode = self._record_mode
         if mode == "playback" and self._loop_ring is not None:
-            audio = self._loop_ring.window_float32(
-                self._settings.window_seconds, self._settings.sample_rate
-            )
+            audio = self._loop_ring.window_float32(seconds, rate)
         elif mode == "meeting" and self._loop_ring is not None:
-            loop = self._loop_ring.window_float32(
-                self._settings.window_seconds, self._settings.sample_rate
-            )
+            loop = self._loop_ring.window_float32(seconds, rate)
             audio = mix_windows(audio, loop)
         if audio.size < min_samples:
             return
         recording = bool(mode)
         if recording:
             energy = float(np.sqrt(np.mean(np.square(audio.astype(np.float64)))))
-            if energy < 0.008:
+            if energy < _RECORD_ENERGY_MIN:
                 self._finish_tick("", 1.0, 0.0, audio)
                 return
         elif not self._voice_ok(audio):
             return
+        beam = self._settings.beam_size_commit if recording else self._settings.beam_size_partial
         text, no_speech, avg_lp = _transcribe(
             model,
             audio,
-            beam_size=self._settings.beam_size_partial,
+            beam_size=beam,
             condition_on_previous_text=self._settings.condition_on_previous_text,
         )
         if not recording:

@@ -144,12 +144,12 @@ def test_mic_on_starts_capture_off_stops_probe(pc_app, qapp) -> None:
     assert overlay._status_key == "off"
 
 
-def test_hide_button_hides_overlay(pc_app, qapp) -> None:
+def test_hide_requested_hides_overlay(pc_app, qapp) -> None:
     overlay = pc_app._overlay
     overlay.show()
     qapp.processEvents()
     assert overlay.isVisible()
-    overlay._hide_btn.click()
+    overlay.hide_requested.emit()
     qapp.processEvents()
     assert not overlay.isVisible()
 
@@ -188,8 +188,7 @@ def test_spanish_language_relabels_overlay(pc_app, qapp) -> None:
     box = overlay.settings._lang_box
     box.setCurrentIndex(box.findData("es"))
     qapp.processEvents()
-    assert overlay._enable.text() == t("es", "mic")
-    assert overlay._hide_btn.text() == t("es", "hide")
+    assert overlay._enable.accessibleName() == t("es", "mic")
     assert overlay._voice_role.text() == t("es", "voice_role")
     assert load_settings(pc_app.settings_file).ui_language == "es"
 
@@ -217,6 +216,45 @@ def test_paste_last_command_pastes_into_other_app(pc_app) -> None:
     pc_app._on_command("paste_last")
     assert pc_app._clipboard.read() == "Paste me."
     assert pc_app._windows.paste_calls == 1
+
+
+def test_translate_command_rewrites_last_phrase(pc_app) -> None:
+    calls = _track_submit(pc_app)
+    pc_app._last_ready = "Hello there."
+    pc_app._commit_source = "audio"
+    pc_app._on_command("translate")
+    assert calls == [{"text": "Hello there.", "mode": "translate"}]
+
+
+def test_translate_command_empty_does_not_call_ollama(pc_app) -> None:
+    calls = _track_submit(pc_app)
+    pc_app._last_ready = ""
+    pc_app._clipboard.write("   ")
+    pc_app._on_command("translate")
+    assert calls == []
+
+
+def test_typed_command_does_not_copy_the_word(pc_app) -> None:
+    calls = _track_submit(pc_app)
+    overlay = pc_app._overlay
+    pc_app._last_ready = "Ready phrase."
+    pc_app._commit_source = "audio"
+    overlay.set_typed("translate last")
+    pc_app._on_typed_commit("translate last")
+    assert overlay.typed_text() == ""
+    assert calls == [{"text": "Ready phrase.", "mode": "translate"}]
+    assert pc_app._clipboard.read() != "translate last"
+
+
+def test_translate_button_uses_that_panel_phrase(pc_app, qapp) -> None:
+    calls = _track_submit(pc_app)
+    overlay = pc_app._overlay
+    overlay.show()
+    overlay.show_typed_phrase("From type.", state="ready")
+    overlay.show_audio_phrase("From the microphone.", state="ready")
+    overlay._audio_translate.click()
+    qapp.processEvents()
+    assert calls == [{"text": "From the microphone.", "mode": "translate"}]
 
 
 def test_retry_cycles_voice_wording(pc_app, qapp) -> None:

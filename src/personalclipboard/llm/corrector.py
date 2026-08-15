@@ -65,7 +65,8 @@ class Corrector:
         }
         if seed is not None:
             options["seed"] = int(seed)
-        kind = "ai" if mode == "ai" else "human"
+        kind = mode.strip() or "human"
+        lang = self._settings.ui_language if self._settings.ui_language in ("en", "fr", "es") else "en"
         try:
             payload = _post_json(
                 self._chat_url,
@@ -75,7 +76,7 @@ class Corrector:
                     "stream": False,
                     "keep_alive": self._keep_alive_s(),
                     "messages": [
-                        {"role": "system", "content": system_prompt(kind)},
+                        {"role": "system", "content": system_prompt(kind, lang=lang)},
                         {"role": "user", "content": user},
                     ],
                     "options": options,

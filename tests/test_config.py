@@ -21,6 +21,10 @@ def test_cuda_whisper_defaults() -> None:
     assert s.condition_on_previous_text is False
     assert s.beam_size_partial == 1
     assert s.beam_size_commit == 3
+    assert s.record_window_seconds == 6.0
+    assert s.record_hop_ms == 800
+    assert s.ring_seconds == 16.0
+    assert s.ring_seconds >= s.record_window_seconds * 2
 
 
 def test_ollama_is_localhost() -> None:

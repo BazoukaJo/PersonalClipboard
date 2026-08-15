@@ -9,7 +9,7 @@ alwaysApply: false
 Whisper is not a native streaming model. Low latency = short overlapping windows + a resident CUDA model.
 
 - Capture: WASAPI via PyAudio, 16 kHz mono, ~20 ms frames, lock-free ring buffer. **sounddevice** is the fallback if PyAudio cannot open a device.
-- Windows: ~2.0 s audio, 250 ms hop. `condition_on_previous_text=False`. Stitch overlapping windows; commit only on `.` `?` `!`.
+- Windows: ~2.0 s audio, 250 ms hop for dictation. Meeting/Playback use ~6 s windows and an 800 ms hop so GPU load from video decode does not skip speech. `condition_on_previous_text=False`. Stitch overlapping windows; commit only on `.` `?` `!` (records also commit on a pause).
 - Model: `large-v3-turbo` (`turbo`), `device="cuda"`, `compute_type="float16"`. HUD Settings can pick another Faster-Whisper size (reload).
 - `beam_size=1` on partials. Partials → overlay only. Whole-phrase voice commands (`paste last`, `copy last`, `correct last`) skip Ollama.
 - Enable OFF must stop the stream, stop the VAD probe, and idle the ASR worker.

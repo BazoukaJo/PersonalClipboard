@@ -79,6 +79,8 @@ _EN = {
     "clear": "Clear",
     "clear_tip": "Clear the Type field.",
     "retry_tip": "Try another wording of this sentence.",
+    "translate": "Translate",
+    "translate_tip": "Translate this sentence into the overlay language.",
     "settings_tip": "Language, opacity, Whisper model, corrector, idle-mic, and type-ahead.",
     "language_tip": "Language of this overlay. Speech recognition still auto-detects.",
     "whisper_tip": "Faster-Whisper model on this PC. Changing it reloads CUDA weights.",
@@ -88,11 +90,14 @@ _EN = {
         "grammar and copy. Always kept readable for a person."
     ),
     "voice_role": "Dictation",
+    "correct_human": "Human",
+    "correct_ai": "AI",
     "voice_phrase_tip": "Last spoken sentence. Copy puts it on the clipboard again.",
-    "hearing_tip": "What Whisper hears right now. This is a partial, not the saved sentence.",
+    "hearing_tip": "What the microphone hears right now. This is a partial, not the saved sentence.",
     "type_tip": (
         "Typed text, separate from Voice. Enter or a period corrects and copies. "
-        "The icons next to Type choose human or AI correction. Tab accepts the grey suggestion."
+        "The Human and AI buttons choose how Type and Ctrl+Shift+A rewrite. "
+        "Tab accepts the grey suggestion."
     ),
     "type_phrase_tip": "Last typed sentence after correction. Copy puts it on the clipboard again.",
     "correct_human_tip": (
@@ -162,6 +167,8 @@ _FR = {
     "clear": "Effacer",
     "clear_tip": "Efface le champ Saisie.",
     "retry_tip": "Propose une autre formulation de cette phrase.",
+    "translate": "Traduire",
+    "translate_tip": "Traduit cette phrase dans la langue de la fenêtre.",
     "status_off": "Micro off",
     "status_loading": "Chargement",
     "status_listening": "Écoute",
@@ -214,11 +221,13 @@ _FR = {
         "corriger et copier. Toujours lisible pour une personne."
     ),
     "voice_role": "Dictée",
+    "correct_human": "Humain",
+    "correct_ai": "IA",
     "voice_phrase_tip": "Dernière phrase dictée. Copier la remet dans le presse-papiers.",
-    "hearing_tip": "Ce que Whisper entend maintenant. Hypothèse partielle, pas la phrase sauvée.",
+    "hearing_tip": "Ce que le micro entend maintenant. Hypothèse partielle, pas la phrase sauvée.",
     "type_tip": (
         "Texte saisi, distinct de la voix. Entrée ou un point corrige et copie. "
-        "Les icônes à côté de Saisie choisissent la correction humaine ou IA. "
+        "Les boutons Humain et IA choisissent la correction de Saisie et Ctrl+Shift+A. "
         "Tab accepte la suggestion."
     ),
     "type_phrase_tip": "Dernière phrase saisie après correction. Copier la remet dans le presse-papiers.",
@@ -274,6 +283,8 @@ _ES = {
     "clear": "Borrar",
     "clear_tip": "Borra el campo Escribir.",
     "retry_tip": "Prueba otra redacción de esta frase.",
+    "translate": "Traducir",
+    "translate_tip": "Traduce esta frase al idioma de la ventana.",
     "status_off": "Mic off",
     "status_loading": "Cargando",
     "status_listening": "Escuchando",
@@ -326,11 +337,13 @@ _ES = {
         "corregir y copiar. Siempre legible para una persona."
     ),
     "voice_role": "Dictado",
+    "correct_human": "Humano",
+    "correct_ai": "IA",
     "voice_phrase_tip": "Última frase dictada. Copiar la vuelve a poner en el portapapeles.",
-    "hearing_tip": "Lo que Whisper oye ahora. Es una hipótesis, no la frase guardada.",
+    "hearing_tip": "Lo que el micrófono oye ahora. Es una hipótesis, no la frase guardada.",
     "type_tip": (
         "Texto escrito, aparte de Voz. Enter o un punto corrige y copia. "
-        "Los iconos junto a Escribir eligen corrección humana o IA. "
+        "Los botones Humano e IA eligen la corrección de Escribir y Ctrl+Shift+A. "
         "Tab acepta la sugerencia."
     ),
     "type_phrase_tip": "Última frase escrita tras la corrección. Copiar la vuelve a poner en el portapapeles.",

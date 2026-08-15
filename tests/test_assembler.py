@@ -129,6 +129,31 @@ def test_meeting_stitches_sliding_windows_until_pause() -> None:
     assert lower.count("shadows") == 1
 
 
+def test_meeting_keeps_stitching_when_whisper_scores_no_speech() -> None:
+    asm = SentenceAssembler(min_chars=4)
+    asm.set_pause_commit(True)
+    kwargs = {
+        "avg_logprob": -1.8,
+        "no_speech_max": 0.65,
+        "logprob_min": -1.2,
+    }
+    _, commit, status = asm.update(
+        "the lighting on the set is harsh",
+        no_speech_prob=0.8,
+        **kwargs,
+    )
+    assert commit is None
+    assert status == "listening"
+    assert "lighting" in asm._acc
+    _, commit, _ = asm.update(
+        "the lighting on the set is harsh tonight.",
+        no_speech_prob=0.7,
+        **kwargs,
+    )
+    assert commit is None
+    assert "tonight" in asm._acc
+
+
 def test_meeting_commits_when_next_sentence_starts() -> None:
     asm = SentenceAssembler(min_chars=4)
     asm.set_pause_commit(True)

@@ -56,6 +56,21 @@ def test_correct_ai_mode_uses_reformulate_prompt(monkeypatch) -> None:
     assert "prompt" in system
 
 
+def test_correct_translate_mode_uses_translate_prompt(monkeypatch) -> None:
+    seen: list[dict] = []
+
+    def fake_post(url: str, *, timeout: float, body: Mapping[str, Any]) -> object:
+        seen.append(dict(body))
+        return {"message": {"content": "Bonjour."}}
+
+    monkeypatch.setattr("personalclipboard.llm.corrector._post_json", fake_post)
+    out = Corrector(Settings(ui_language="fr")).correct("Hello.", mode="translate")
+    assert out == "Bonjour."
+    system = seen[0]["messages"][0]["content"].lower()
+    assert "french" in system
+    assert "translat" in system
+
+
 def test_correct_retry_sends_temperature_and_seed(monkeypatch) -> None:
     seen: list[dict] = []
 

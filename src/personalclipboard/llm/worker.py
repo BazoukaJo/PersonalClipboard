@@ -65,7 +65,7 @@ class LlmWorker:
             # A committed sentence must not keep showing a stale Type ghost.
             self._latest_complete += 1
             job_id = self._latest
-        kind = "ai" if mode == "ai" else "human"
+        kind = mode.strip() or "human"
         self._queue.put(_Job(job_id, "correct", text, temperature, seed, vary, kind))
         return job_id
 

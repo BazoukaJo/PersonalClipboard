@@ -7,6 +7,7 @@ def test_about_identifies_the_app() -> None:
     assert app_version() in about_body()
     assert "127.0.0.1" in body
     assert "paste last" in body
+    assert "translate" in body
     assert "tab" in body
     assert "ctrl+shift+r" in body
 

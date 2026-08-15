@@ -57,6 +57,8 @@ class Settings:
     frame_ms: int = 20
     window_seconds: float = 2.0
     hop_ms: int = 250
+    record_window_seconds: float = 6.0
+    record_hop_ms: int = 800
     whisper_model: str = "large-v3-turbo"
     whisper_device: str = "cuda"
     compute_type: str = "float16"
@@ -71,7 +73,7 @@ class Settings:
     type_hotkey: str = "<ctrl>+<shift>+r"
     persist_audio: bool = False  # debug WAV only; never default on
     preferred_input: str = "maono"
-    ring_seconds: float = 8.0
+    ring_seconds: float = 16.0
     no_speech_prob_max: float = 0.65
     avg_logprob_min: float = -1.2
     min_commit_chars: int = 2

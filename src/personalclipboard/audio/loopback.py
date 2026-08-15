@@ -221,11 +221,16 @@ class LoopbackCapture:
                 pass
 
 
+def render_device_roles() -> tuple[int, int]:
+    """YouTube and other apps play on eConsole; VoIP is eCommunications."""
+    return (E_CONSOLE, E_COMMUNICATIONS)
+
+
 def _default_render(enumerator: c_void_p) -> c_void_p:
     get_default = _fn(
         enumerator, 4, ctypes.HRESULT, wintypes.DWORD, wintypes.DWORD, POINTER(c_void_p)
     )
-    for role in (E_COMMUNICATIONS, E_CONSOLE):
+    for role in render_device_roles():
         device = c_void_p()
         if get_default(enumerator, E_RENDER, role, byref(device)) == 0 and device:
             return device
@@ -261,7 +266,7 @@ def _initialize_loopback(client: c_void_p, sample_rate: int) -> None:
         | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
         | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY
     )
-    hr = initialize(client, AUDCLNT_SHAREMODE_SHARED, flags, 2_000_000, 0, byref(fmt), None)
+    hr = initialize(client, AUDCLNT_SHAREMODE_SHARED, flags, 10_000_000, 0, byref(fmt), None)
     if hr == 0:
         return
     raise OSError(f"Speaker capture format failed ({hex(_hr(hr))}).")

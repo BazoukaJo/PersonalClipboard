@@ -49,12 +49,15 @@ class SentenceAssembler:
             self.reset()
             return "", text, "listening"
 
-        quiet = no_speech_prob > no_speech_max or not text
-        if quiet:
+        if not text:
+            return self._on_quiet()
+        # YouTube/video mix often scores high no_speech / low logprob even when
+        # speech is clear. Dictation still gates; records keep stitching.
+        if not self._pause_commit and no_speech_prob > no_speech_max:
             return self._on_quiet()
 
         self._quiet_hops = 0
-        if avg_logprob < logprob_min:
+        if avg_logprob < logprob_min and not self._pause_commit:
             return text, None, "uncertain"
 
         window = strip_committed(text, self._committed)

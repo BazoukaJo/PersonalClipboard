@@ -72,6 +72,30 @@ def test_submit_passes_retry_options() -> None:
     assert fake.kwargs["mode"] == "human"
 
 
+def test_submit_passes_translate_mode() -> None:
+    class Recording:
+        def __init__(self) -> None:
+            self.mode = ""
+
+        def correct(self, text: str, **kwargs: object) -> str:
+            self.mode = str(kwargs.get("mode", ""))
+            return text
+
+        def complete(self, prefix: str) -> str:
+            return ""
+
+    fake = Recording()
+    got: list[str] = []
+    worker = LlmWorker(fake, lambda _jid, text: got.append(text))
+    worker.submit("Hello there.", mode="translate")
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline and not got:
+        time.sleep(0.02)
+    worker.shutdown()
+    assert got == ["Hello there."]
+    assert fake.mode == "translate"
+
+
 def test_submit_passes_ai_mode() -> None:
     class Recording:
         def __init__(self) -> None:

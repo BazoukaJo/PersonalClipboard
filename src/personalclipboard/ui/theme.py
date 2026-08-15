@@ -29,7 +29,6 @@ def control_chrome() -> str:
                 font-size: 12px;
             }}
             QLabel {{ background: transparent; color: {MUTED}; font-size: 13px; }}
-            QLabel#brand {{ color: {TEXT}; font-size: 15px; font-weight: 600; }}
             QLabel#sectionTitle {{ color: {ACCENT}; font-size: 12px; font-weight: 600; }}
             QLabel#fieldLabel {{ color: {ACCENT}; font-size: 13px; }}
             QLabel#opacityValue {{
@@ -91,10 +90,6 @@ def control_chrome() -> str:
                 background: rgba(56, 96, 140, 70);
                 border: 1px solid rgba(120, 160, 210, 90);
             }}
-            QFrame#settingsDock {{
-                background: transparent;
-                border: none;
-            }}
             QFrame#actions {{
                 background: transparent;
                 border: none;
@@ -125,44 +120,40 @@ def control_chrome() -> str:
                 border: 1px solid {ACCENT}; background: rgba(18, 18, 20, 180);
             }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; }}
-            QCheckBox#micToggle {{
-                font-size: 13px; font-weight: 600; padding: 6px 14px;
-                min-height: 24px; min-width: 72px; spacing: 0;
-            }}
-            QCheckBox#micToggle::indicator {{
-                width: 0; height: 0; margin: 0; padding: 0;
-                border: none; background: transparent;
-            }}
-            QCheckBox#micToggle:checked {{
-                background: rgba(47, 175, 90, 48);
-                border: 1px solid rgba(95, 220, 134, 110);
-                color: #e8f8ee;
-            }}
-            QRadioButton#modeRadio {{
-                background: transparent;
-                color: {MUTED};
-                border: 1px solid transparent;
-                padding: 2px 4px;
-                min-height: 22px;
-                min-width: 0;
-                font-size: 14px;
-                font-weight: 600;
-                spacing: 4px;
-            }}
-            QRadioButton#modeRadio::indicator {{
-                width: 12px; height: 12px; border-radius: 6px;
-                border: 1px solid {ACCENT};
-                background: rgba(18, 18, 20, 180);
-            }}
-            QRadioButton#modeRadio::indicator:checked {{
-                background: {ACCENT};
-                border: 1px solid {TEXT};
-            }}
-            QRadioButton#modeRadio:checked {{ color: {TEXT}; }}
-            QRadioButton#modeRadio:hover {{
+            QToolButton#micToggle {{
+                background: rgba(12, 12, 14, 120);
                 color: {TEXT};
-                border-color: rgba(210, 210, 214, 50);
-                background: rgba(40, 40, 44, 90);
+                border: 1px solid rgba(255, 255, 255, 22);
+                border-radius: 9px;
+                padding: 6px 12px;
+                min-height: 32px;
+                min-width: 108px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+            QToolButton#micToggle:hover {{
+                border-color: rgba(210, 210, 214, 90);
+                background: rgba(40, 40, 44, 140);
+            }}
+            QToolButton#modeSeg {{
+                background: rgba(12, 12, 14, 90);
+                color: {MUTED};
+                border: 1px solid rgba(255, 255, 255, 22);
+                border-radius: 9px;
+                padding: 6px 12px;
+                min-height: 32px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+            QToolButton#modeSeg:hover {{
+                color: {TEXT};
+                border-color: rgba(210, 210, 214, 70);
+                background: rgba(40, 40, 44, 120);
+            }}
+            QToolButton#modeSeg:checked {{
+                color: {TEXT};
+                background: rgba(40, 40, 48, 160);
+                border: 1px solid rgba(210, 210, 214, 80);
             }}
             QPushButton#ghost {{ min-width: 72px; }}
             QPushButton#quiet {{
@@ -198,7 +189,8 @@ def control_chrome() -> str:
             QPushButton#quiet:pressed {{
                 background: rgba(8, 8, 10, 160);
             }}
-            QPushButton:disabled, QCheckBox:disabled, QToolButton#iconBtn:disabled {{
+            QPushButton:disabled, QCheckBox:disabled, QToolButton#iconBtn:disabled,
+            QToolButton#micToggle:disabled, QToolButton#modeSeg:disabled {{
                 color: #6e6e74; border-color: rgba(255, 255, 255, 10);
                 background: rgba(12, 12, 14, 60);
             }}

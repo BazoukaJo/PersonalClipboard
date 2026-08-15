@@ -15,10 +15,16 @@ ROOT = Path(SPECPATH).resolve().parent
 SRC = ROOT / "src"
 ICON = ROOT / "packaging" / "app.ico"
 HOOK = ROOT / "packaging" / "runtime_hook_cuda.py"
+ICON_DIR = SRC / "personalclipboard" / "ui" / "icons"
 
 datas: list = []
 binaries: list = []
 hidden: list = collect_submodules("personalclipboard")
+
+if ICON_DIR.is_dir():
+    for item in ICON_DIR.iterdir():
+        if item.suffix.lower() in {".svg", ".txt"}:
+            datas.append((str(item), "personalclipboard/ui/icons"))
 
 for pkg in (
     "faster_whisper",
@@ -68,6 +74,7 @@ hidden += [
     "PyQt6.QtGui",
     "PyQt6.QtWidgets",
     "PyQt6.QtNetwork",
+    "PyQt6.QtSvg",
     "pynput.keyboard._win32",
     "pynput.mouse._win32",
 ]

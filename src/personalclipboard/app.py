@@ -11,6 +11,7 @@ from PyQt6.QtCore import QObject, QRect, Qt, QTimer
 from PyQt6.QtGui import QAction, QScreen
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
+from personalclipboard.asr.commands import REWRITE_COMMANDS, match_command
 from personalclipboard.asr.engine import AsrEngine
 from personalclipboard.audio.capture import AudioCapture
 from personalclipboard.audio.probe import WakeProbe
@@ -173,6 +174,7 @@ class PersonalClipboardApp(QObject):
         self._overlay.record_start_requested.connect(self._start_record)
         self._overlay.record_stop_requested.connect(self._on_record_stop)
         self._overlay.retry_requested.connect(self._on_retry_requested)
+        self._overlay.translate_requested.connect(self._on_translate_requested)
         self._overlay.correction_mode_changed.connect(self._on_correction_mode_changed)
         panel = self._overlay.settings
         panel.language_changed.connect(self._on_language_changed)
@@ -246,18 +248,23 @@ class PersonalClipboardApp(QObject):
         if screen is None:
             return
         saved = saved_overlay_rect(self._settings)
-        if saved is not None and _visible_on_screens(qt, *saved):
-            self._overlay.setGeometry(*saved)
-            self._overlay.clamp_to_screen()
-        else:
-            geo = screen.availableGeometry()
-            hint = self._overlay.sizeHint()
-            width = min(max(520, hint.width()), geo.width())
-            height = min(max(hint.height(), self._overlay.minimumHeight()), geo.height())
-            self._overlay.resize(width, height)
-            x = geo.x() + (geo.width() - self._overlay.width()) // 2
-            y = geo.y() + 24
-            self._overlay.move(x, y)
+        if saved is not None:
+            x, y, width, _saved_h = saved
+            hint_h = max(self._overlay.sizeHint().height(), 220)
+            if _visible_on_screens(qt, x, y, width, hint_h):
+                self._overlay.resize(width, hint_h)
+                self._overlay.move(x, y)
+                self._overlay.clamp_to_screen()
+                self._watch_screens(qt)
+                return
+        geo = screen.availableGeometry()
+        hint = self._overlay.sizeHint()
+        width = min(max(520, hint.width()), geo.width())
+        self._overlay.resize(width, max(hint.height(), 220))
+        x = geo.x() + (geo.width() - self._overlay.width()) // 2
+        y = geo.y() + 24
+        self._overlay.move(x, y)
+        self._overlay.clamp_to_screen()
         self._watch_screens(qt)
 
     def _watch_screens(self, qt: QApplication) -> None:
@@ -341,6 +348,11 @@ class PersonalClipboardApp(QObject):
         self._finish_phrase(text, "audio")
 
     def _on_typed_commit(self, text: str) -> None:
+        command = match_command(text)
+        if command:
+            self._overlay.set_typed("")
+            self._on_command(command)
+            return
         self._finish_phrase(text, "typed")
 
     def _finish_phrase(self, text: str, source: str) -> None:
@@ -424,6 +436,45 @@ class PersonalClipboardApp(QObject):
             self._copy_last()
         elif command == "correct_last":
             self._on_reformat()
+        elif command in REWRITE_COMMANDS:
+            self._rewrite_last(command)
+
+    def _rewrite_last(self, mode: str) -> None:
+        text = (self._last_ready or self._clipboard.read()).strip()
+        if not text:
+            message = (
+                "Nothing to translate yet."
+                if mode == "translate"
+                else "Nothing to rewrite yet."
+            )
+            self._overlay.set_message(message)
+            return
+        source = self._commit_source if self._commit_source in ("audio", "typed") else "audio"
+        self._rewrite_phrase(mode, text, source)
+
+    def _on_translate_requested(self, source: str) -> None:
+        if self._stopped or self._meeting is not None:
+            return
+        kind = "audio" if source == "audio" else "typed"
+        text = self._overlay.phrase_text(kind)
+        if not text:
+            self._overlay.set_message("Nothing to translate yet.")
+            return
+        self._rewrite_phrase("translate", text, kind)
+
+    def _rewrite_phrase(self, mode: str, text: str, source: str) -> None:
+        stripped = text.strip()
+        if not stripped:
+            return
+        self._commit_source = source
+        self._phrases.reset(stripped)
+        if source == "typed":
+            self._typed_original = stripped
+            self._overlay.show_typed_phrase(stripped, state="correcting")
+        else:
+            self._overlay.show_audio_phrase(stripped, state="correcting")
+        self._overlay.set_message("Correcting…")
+        self._llm.submit(stripped, mode=mode)
 
     def _copy_ready(self) -> None:
         text = self._last_ready or self._clipboard.read()

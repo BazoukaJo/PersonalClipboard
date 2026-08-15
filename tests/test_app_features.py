@@ -203,7 +203,7 @@ def test_settings_language_persists(pc_app, monkeypatch) -> None:
     pc_app._on_language_changed("fr")
     assert pc_app._settings.ui_language == "fr"
     pc_app._overlay.apply_language("fr")
-    assert pc_app._overlay._enable.text() == "Micro"
+    assert pc_app._overlay._enable.accessibleName() == "Micro"
 
 
 def test_settings_opacity_and_vad(pc_app) -> None:
@@ -220,17 +220,17 @@ def test_settings_opacity_and_vad(pc_app) -> None:
 
 
 def test_overlay_geometry_restored(pc_app, qapp) -> None:
-    height = max(pc_app._overlay.height(), 220)
     pc_app._settings.overlay_x = 40
     pc_app._settings.overlay_y = 50
     pc_app._settings.overlay_w = 560
-    pc_app._settings.overlay_h = height
+    pc_app._settings.overlay_h = 999
     pc_app._place_overlay(qapp)
     geo = pc_app._overlay.geometry()
     assert geo.x() == 40
     assert geo.y() == 50
     assert geo.width() == 560
-    assert geo.height() == height
+    assert geo.height() == pc_app._overlay.minimumHeight()
+    assert geo.height() < 900
 
 
 def test_overlay_geometry_falls_back_when_unset(pc_app, qapp) -> None:

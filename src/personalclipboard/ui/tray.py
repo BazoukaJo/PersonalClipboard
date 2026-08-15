@@ -31,6 +31,7 @@ def about_body() -> str:
         "In Type, Tab accepts the grey suggestion while that field is focused.\n"
         "Ctrl+Shift+R focuses Type; press again to return to the other app.\n"
         "Say paste last, copy last, or correct last.\n"
+        "Say translate, summarize, shorter, bullets, or email to rewrite the last phrase.\n"
         "Ctrl+Shift+A reformats the current clipboard.\n"
         "Record meeting transcribes microphone and speaker audio to notes on the desktop.\n"
         "Record playback transcribes only what you hear (YouTube, videos, other apps).\n"

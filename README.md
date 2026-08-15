@@ -6,14 +6,14 @@ Hardware target: **Intel i9-14900K** + **NVIDIA RTX 4070 Ti SUPER** (16 GB).
 
 ![PersonalClipboard overlay](docs/images/overlay.png)
 
-The HUD is a translucent always-on-top tool window. **Mic** is the privacy kill switch. After a short silence, VAD stops the streaming microphone and idles Whisper; speech wakes them. **Settings** on the HUD picks language (English, Français, Español), opacity, Whisper model, Ollama corrector, idle-mic-when-quiet, and type-ahead. **Voice** shows the live partial and the last spoken sentence (always a human-readable fix). **Type** is a separate correct-and-copy field; icon radios on that row choose a human grammar fix or an AI prompt rewrite. While Type is focused, grey suggestions come from the same local model and **Tab** inserts them. **Record** starts a desktop transcript: **Meeting** (microphone + speakers) or **Playback** (speakers only, for YouTube and other app audio). **Records** opens saved transcripts. **Clips** is clipboard history.
+The HUD is a translucent always-on-top tool window. **Listening** on the header is the privacy kill switch; **Human** and **AI** on the same row choose how Type and Ctrl+Shift+A rewrite. After a short silence, VAD stops the streaming microphone and idles Whisper; speech wakes them. **Settings** is a modal for language (English, Français, Español), opacity, Whisper model, Ollama corrector, idle-mic-when-quiet, and type-ahead. **Voice** shows the live microphone partial (Hearing) and the last spoken sentence (always a human-readable fix). **Type** is a separate correct-and-copy field; grey suggestions come from the same local model and **Tab** inserts them. Retry and Translate sit beside a finished sentence. **Record** starts a desktop transcript: **Meeting** (microphone + speakers) or **Playback** (speakers only, for YouTube and other app audio). **Records** opens saved transcripts. **Clips** is clipboard history.
 
 ## Download (Windows)
 
-GitHub limits each file to 2 GiB, so v0.3 is two zips. Download **both** from [v0.3.0](https://github.com/BazoukaJo/PersonalClipboard/releases/tag/v0.3.0) and unzip them into the **same** folder:
+GitHub limits each file to 2 GiB, so v0.3.1 is two zips. Download **both** from [v0.3.1](https://github.com/BazoukaJo/PersonalClipboard/releases/tag/v0.3.1) and unzip them into the **same** folder:
 
-1. `PersonalClipboard-0.3.0-windows-x64.zip` — app
-2. `PersonalClipboard-0.3.0-windows-x64-cuda12.zip` — CUDA 12 DLLs (`_internal\nvidia`)
+1. `PersonalClipboard-0.3.1-windows-x64.zip` — app
+2. `PersonalClipboard-0.3.1-windows-x64-cuda12.zip` — CUDA 12 DLLs (`_internal\nvidia`)
 
 Then run `PersonalClipboard\PersonalClipboard.exe`.
 
@@ -73,6 +73,7 @@ Full CUDA / cuDNN notes: [docs/SETUP.md](docs/SETUP.md).
 | Say **paste last** | Focuses the last other window and pastes. |
 | Say **copy last** | Copies the selection from the last other window. |
 | Say **correct last** or **Ctrl+Shift+A** | Rewrites the current clipboard (works with Mic off). |
+| Say **translate**, **summarize**, **shorter**, **bullets**, or **email** | Rewrites the last phrase with the local corrector. Translate also has an icon under Retry. |
 | **Record → Meeting** | Microphone + speakers/headphones to a desktop markdown file. Not the clipboard. |
 | **Record → Playback** | Speakers/headphones only (YouTube, videos, other apps). No picture. Not the clipboard. |
 | **Records** | Open saved meeting and playback transcripts. Click a row for the full note. |

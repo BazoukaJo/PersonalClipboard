@@ -12,12 +12,12 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 _DIST = _ROOT / "dist" / "PersonalClipboard"
 _OUT = _ROOT / "release"
-_APP = "PersonalClipboard-0.3.0-windows-x64.zip"
-_CUDA = "PersonalClipboard-0.3.0-windows-x64-cuda12.zip"
-_README = """PersonalClipboard v0.3
+_APP = "PersonalClipboard-0.3.1-windows-x64.zip"
+_CUDA = "PersonalClipboard-0.3.1-windows-x64-cuda12.zip"
+_README = """PersonalClipboard v0.3.1
 
-1. Unzip PersonalClipboard-0.3.0-windows-x64.zip
-2. Unzip PersonalClipboard-0.3.0-windows-x64-cuda12.zip into the same folder
+1. Unzip PersonalClipboard-0.3.1-windows-x64.zip
+2. Unzip PersonalClipboard-0.3.1-windows-x64-cuda12.zip into the same folder
    (it adds PersonalClipboard\\_internal\\nvidia).
 3. Install Ollama for Windows and run:
      ollama pull qwen2.5:1.5b

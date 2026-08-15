@@ -23,12 +23,12 @@ def _stage(overlay: Overlay) -> None:
     overlay.set_opacity(80)
     overlay.set_listen_enabled(True)
     overlay.set_enable_checked(True)
-    overlay.set_status("locked")
+    overlay.set_status("listening")
     overlay.set_correction_mode("human")
     overlay.show_partial("the light is too harsh on the character")
-    overlay.show_audio_phrase("The light is too harsh on the character.")
-    overlay.set_typed("The meeting is")
     overlay.show_typed_phrase("The meeting is scheduled for Monday.")
+    overlay.set_typed("The meeting is")
+    overlay.show_audio_phrase("The light is too harsh on the character.")
     overlay.resize(560, max(overlay.sizeHint().height(), 300))
 
 

@@ -1,6 +1,6 @@
 # PersonalClipboard — Product Requirements Document
 
-**Status:** v0.2 live dictation overlay (Windows).  
+**Status:** v0.3.1 live dictation overlay (Windows).  
 **Platform:** Windows 10/11  
 **Hardware target:** Intel Core i9-14900K, NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)  
 **Privacy:** fully local; no cloud services

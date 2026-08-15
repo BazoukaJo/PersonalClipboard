@@ -33,6 +33,7 @@ def about_body() -> str:
         "Say paste last, copy last, or correct last.\n"
         "Ctrl+Shift+A reformats the current clipboard.\n"
         "Record meeting transcribes microphone and speaker audio to notes on the desktop.\n"
+        "Record playback transcribes only what you hear (YouTube, videos, other apps).\n"
         "Starting the app again replaces the running overlay.\n\n"
         "Uncheck Mic to idle the microphone."
     )

@@ -6,6 +6,7 @@ import sys
 
 from PyQt6.QtCore import QByteArray, QEvent, QPoint, QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
+    QAction,
     QColor,
     QFont,
     QFontMetrics,
@@ -19,12 +20,15 @@ from PyQt6.QtGui import (
     QTextCursor,
 )
 from PyQt6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -32,7 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 from personalclipboard.config import OPACITY_MAX, OPACITY_MIN, shell_alpha
-from personalclipboard.ui.i18n import flash_key, t
+from personalclipboard.ui.i18n import LANG_CODES, flash_key, t, ui_lang
 from personalclipboard.ui.predict_edit import PredictLineEdit
 from personalclipboard.ui.settings_panel import SettingsPanel
 from personalclipboard.ui.theme import control_chrome, pointing
@@ -88,10 +92,14 @@ class Overlay(QWidget):
     hide_requested = pyqtSignal()
     copy_requested = pyqtSignal()
     history_requested = pyqtSignal()
+    records_requested = pyqtSignal()
     phrase_completed = pyqtSignal(str)
+    record_start_requested = pyqtSignal(str)
+    record_stop_requested = pyqtSignal()
     meeting_toggled = pyqtSignal(bool)
     prediction_requested = pyqtSignal(str)
     retry_requested = pyqtSignal()
+    correction_mode_changed = pyqtSignal(str)
     geometry_changed = pyqtSignal()
 
     def __init__(self) -> None:
@@ -101,6 +109,7 @@ class Overlay(QWidget):
         self._typed_prev = ""
         self._elide: dict[QLabel, tuple[str, bool, str]] = {}
         self._meeting_on = False
+        self._record_kind = ""
         self._predict_want = True
         self._settings_closed_size: QSize | None = None
         self._status_key = "off"
@@ -111,7 +120,10 @@ class Overlay(QWidget):
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._restore_status)
         self._copy_btn = QPushButton("Copy", self)
-        self._history_btn = QPushButton("History", self)
+        self._history_btn = QPushButton("Clips", self)
+        self._record_btn = QPushButton("Record", self)
+        self._records_btn = QPushButton("Records", self)
+        self._settings_btn = QPushButton("Settings", self)
         self._hide_btn = QPushButton("Hide", self)
         self._brand = QLabel("Clipboard", self)
         self._lang = "en"
@@ -124,14 +136,14 @@ class Overlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFont(QFont("Segoe UI", 10))
-        self.setMinimumWidth(440)
+        self.setMinimumWidth(500)
         self._build()
         self._root.setSizeConstraint(QVBoxLayout.SizeConstraint.SetDefaultConstraint)
-        self.resize(520, max(self.sizeHint().height(), 260))
-        self._sync_mic_dot()
+        self.resize(560, max(self.sizeHint().height(), 280))
 
     def _build(self) -> None:
         top = self._make_top()
+        self._voice_role = _role_tag("Dictation", self)
         (
             audio,
             self._audio_live,
@@ -139,7 +151,13 @@ class Overlay(QWidget):
             self._voice_title,
             self._hear_tag,
             self._audio_cycle,
-        ) = _result_panel("Voice", live_tag="Hearing", parent=self)
+        ) = _result_panel(
+            "Voice",
+            live_tag="Hearing",
+            header_extra=self._voice_role,
+            role="voice",
+            parent=self,
+        )
         self._audio_frame = audio
         audio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self._input = PredictLineEdit(self)
@@ -147,8 +165,15 @@ class Overlay(QWidget):
         self._input.textChanged.connect(self._on_typed)
         self._input.returnPressed.connect(self._commit_typed_enter)
         self._input.prediction_requested.connect(self.prediction_requested.emit)
+        self._mode_human, self._mode_ai, mode_row = _correction_radios(self)
+        self._mode_group = QButtonGroup(self)
+        self._mode_group.setExclusive(True)
+        self._mode_group.addButton(self._mode_human)
+        self._mode_group.addButton(self._mode_ai)
+        self._mode_human.toggled.connect(self._on_correction_mode)
+        self._mode_ai.toggled.connect(self._on_correction_mode)
         typed, _, self._typed_body, self._type_title, _tag, self._typed_cycle = _result_panel(
-            "Type", extra=self._input, parent=self
+            "Type", extra=self._input, header_extra=mode_row, role="type", parent=self
         )
         self._audio_cycle.clicked.connect(self.retry_requested.emit)
         self._typed_cycle.clicked.connect(self.retry_requested.emit)
@@ -165,17 +190,22 @@ class Overlay(QWidget):
         self._meet_tag = pack[6]
         self._meet_frame = meeting
         meeting.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-        self._meet_btn.clicked.connect(self._toggle_meeting)
+        self._meet_btn.clicked.connect(self._stop_recording)
         self.settings = SettingsPanel(self)
         self.settings.language_changed.connect(self.apply_language)
         self.settings.opacity_changed.connect(self.set_opacity)
         self.settings.expanded_changed.connect(self._on_settings_expanded)
+        self._settings_btn.clicked.connect(self.settings.toggle)
+        actions = self._make_actions()
+        meeting.setVisible(False)
         root = QVBoxLayout(self)
         self._root = root
-        root.setContentsMargins(16, 16, 16, 14)
+        root.setContentsMargins(16, 14, 16, 14)
         root.setSpacing(10)
+        self._section_rule = _section_rule(self)
         root.addLayout(top)
         root.addWidget(audio, 0)
+        root.addWidget(self._section_rule, 0)
         root.addWidget(typed, 0)
         root.addWidget(meeting, 0)
         root.addWidget(self.settings, 0)
@@ -183,6 +213,7 @@ class Overlay(QWidget):
         self._slack.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self._slack.setMinimumHeight(0)
         root.addWidget(self._slack, 1)
+        root.addWidget(actions, 0)
         self._apply_chrome()
         self._relabel()
         self.show_partial("")
@@ -190,35 +221,62 @@ class Overlay(QWidget):
         self.show_typed_phrase("")
 
     def _make_top(self) -> QHBoxLayout:
-        self._enable.setToolTip("Off stops the microphone.")
+        self._enable.setToolTip(t("en", "mic_tip"))
         self._enable.toggled.connect(self._on_mic_toggled)
         self._status.setObjectName("statusPill")
         self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status.setMinimumWidth(108)
-        self._copy_btn.setObjectName("ghost")
-        self._copy_btn.setToolTip("Copy the last finished sentence again")
-        self._copy_btn.clicked.connect(self.copy_requested.emit)
-        self._history_btn.setObjectName("ghost")
-        self._history_btn.setToolTip("Show clipboard history.")
-        self._history_btn.clicked.connect(self.history_requested.emit)
+        self._status.setMinimumWidth(100)
+        self._status.setToolTip(t("en", "status_tip"))
         hide = self._hide_btn
         hide.setObjectName("quiet")
-        hide.setToolTip("Hide this window. Click the tray icon to show it.")
+        hide.setToolTip(t("en", "hide_tip"))
         hide.clicked.connect(self.hide_requested.emit)
         self._brand.setObjectName("brand")
-        pointing(self._enable, self._history_btn, self._copy_btn, hide)
+        self._brand.setToolTip(t("en", "brand_tip"))
+        pointing(self._enable, hide)
         top = QHBoxLayout()
         top.setContentsMargins(0, 6, 0, 2)
         top.setSpacing(8)
         top.addWidget(self._brand)
-        top.addWidget(self._history_btn)
         top.addStretch(1)
         top.addWidget(self._enable)
         top.addWidget(self._status)
-        top.addSpacing(12)
-        top.addWidget(self._copy_btn)
         top.addWidget(hide)
         return top
+
+    def _make_actions(self) -> QFrame:
+        for button, name in (
+            (self._copy_btn, "ghost"),
+            (self._history_btn, "ghost"),
+            (self._record_btn, "primary"),
+            (self._records_btn, "ghost"),
+            (self._settings_btn, "ghost"),
+        ):
+            button.setObjectName(name)
+            pointing(button)
+        self._copy_btn.clicked.connect(self.copy_requested.emit)
+        self._history_btn.clicked.connect(self.history_requested.emit)
+        self._records_btn.clicked.connect(self.records_requested.emit)
+        self._record_btn.clicked.connect(self._on_record_clicked)
+        self._record_menu = QMenu(self)
+        self._act_meeting = QAction(t("en", "record_meeting"), self)
+        self._act_playback = QAction(t("en", "record_playback"), self)
+        self._record_menu.addAction(self._act_meeting)
+        self._record_menu.addAction(self._act_playback)
+        self._act_meeting.triggered.connect(lambda: self.record_start_requested.emit("meeting"))
+        self._act_playback.triggered.connect(lambda: self.record_start_requested.emit("playback"))
+        bar = QFrame(self)
+        bar.setObjectName("actions")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 2, 0, 0)
+        row.setSpacing(8)
+        row.addWidget(self._copy_btn)
+        row.addWidget(self._history_btn)
+        row.addWidget(self._record_btn)
+        row.addWidget(self._records_btn)
+        row.addStretch(1)
+        row.addWidget(self._settings_btn)
+        return bar
 
     def _apply_chrome(self) -> None:
         self._status.setStyleSheet(_status_chrome("off"))
@@ -333,18 +391,16 @@ class Overlay(QWidget):
         tone = state or ("ready" if stripped else "empty")
         _set_body(self._audio_body, stripped, self._empty, state=tone)
         self._sync_output_cycle("audio", bool(stripped), busy=tone == "correcting")
-        if stripped and not self._meeting_on:
-            _set_active(self._audio_frame, True)
-            _set_active(self._typed_frame, False)
+        if not self._meeting_on:
+            _set_active(self._audio_frame, bool(stripped) and tone != "empty")
 
     def show_typed_phrase(self, text: str, *, state: str | None = None) -> None:
         stripped = text.strip()
         tone = state or ("ready" if stripped else "empty")
         _set_body(self._typed_body, stripped, self._empty, state=tone)
         self._sync_output_cycle("typed", bool(stripped), busy=tone == "correcting")
-        if stripped and not self._meeting_on:
-            _set_active(self._typed_frame, True)
-            _set_active(self._audio_frame, False)
+        if not self._meeting_on:
+            _set_active(self._typed_frame, bool(stripped) and tone != "empty")
 
     def set_typed(self, text: str) -> None:
         self._updating_input = True
@@ -406,7 +462,6 @@ class Overlay(QWidget):
 
     def set_status(self, status: str) -> None:
         self._status_key = status
-        self._sync_mic_dot()
         if not self._flash_timer.isActive():
             self._paint_status(status)
 
@@ -423,18 +478,35 @@ class Overlay(QWidget):
         self._enable.blockSignals(True)
         self._enable.setChecked(checked)
         self._enable.blockSignals(False)
-        self._sync_mic_dot()
+
+    def correction_mode(self) -> str:
+        return "ai" if self._mode_ai.isChecked() else "human"
+
+    def set_correction_mode(self, mode: str) -> None:
+        ai = mode == "ai"
+        self._mode_human.blockSignals(True)
+        self._mode_ai.blockSignals(True)
+        self._mode_ai.setChecked(ai)
+        self._mode_human.setChecked(not ai)
+        self._mode_human.blockSignals(False)
+        self._mode_ai.blockSignals(False)
+
+    def _on_correction_mode(self, checked: bool) -> None:
+        if not checked:
+            return
+        self.correction_mode_changed.emit(self.correction_mode())
 
     def set_listen_enabled(self, enabled: bool) -> None:
         self._enable.setEnabled(enabled)
         self._meet_btn.setEnabled(enabled)
+        self._record_btn.setEnabled(enabled)
 
     def apply_language(self, lang: str) -> None:
-        self._lang = lang if lang in ("en", "fr", "es", "de") else "en"
+        self._lang = ui_lang(lang)
         self._empty = t(self._lang, "empty")
         self._relabel()
         self.settings.retranslate(self._lang)
-        blanks = {t(code, "empty") for code in ("en", "fr", "es", "de")}
+        blanks = {t(code, "empty") for code in LANG_CODES}
         if self._audio_body.text() in blanks:
             _set_body(self._audio_body, "", self._empty, state="empty")
         if self._typed_body.text() in blanks:
@@ -445,52 +517,67 @@ class Overlay(QWidget):
     def _relabel(self) -> None:
         lang = self._lang
         self._brand.setText(t(lang, "app_title"))
-        self._history_btn.setText(t(lang, "history"))
-        self._history_btn.setToolTip(t(lang, "history_tip"))
+        self._brand.setToolTip(t(lang, "brand_tip"))
+        self._history_btn.setText(t(lang, "clips"))
+        self._history_btn.setToolTip(t(lang, "clips_tip"))
+        self._records_btn.setText(t(lang, "records"))
+        self._records_btn.setToolTip(t(lang, "records_tip"))
+        self._settings_btn.setText(t(lang, "hide" if self.settings.is_expanded() else "settings"))
+        self._settings_btn.setToolTip(t(lang, "hide_tip" if self.settings.is_expanded() else "settings_tip"))
         self._enable.setText(t(lang, "mic"))
         self._enable.setToolTip(t(lang, "mic_tip"))
+        self._status.setToolTip(t(lang, "status_tip"))
         self._copy_btn.setText(t(lang, "copy"))
         copy_key = "copy_meet_tip" if self._meeting_on else "copy_tip"
         self._copy_btn.setToolTip(t(lang, copy_key))
         self._hide_btn.setText(t(lang, "hide"))
         self._hide_btn.setToolTip(t(lang, "hide_tip"))
         self._voice_title.setText(t(lang, "voice"))
+        self._voice_title.setToolTip(t(lang, "voice_tip"))
+        self._voice_role.setText(t(lang, "voice_role"))
+        self._voice_role.setToolTip(t(lang, "voice_tip"))
         self._hear_tag.setText(t(lang, "hearing"))
+        self._hear_tag.setToolTip(t(lang, "hearing_tip"))
+        self._audio_live.setToolTip(t(lang, "hearing_tip"))
+        self._audio_body.setToolTip(t(lang, "voice_phrase_tip"))
         self._type_title.setText(t(lang, "type"))
+        self._type_title.setToolTip(t(lang, "type_tip"))
+        self._mode_human.setToolTip(t(lang, "correct_human_tip"))
+        self._mode_ai.setToolTip(t(lang, "correct_ai_tip"))
+        self._typed_body.setToolTip(t(lang, "type_phrase_tip"))
         self._input.setPlaceholderText(t(lang, "type_hint"))
-        self._input.setToolTip(t(lang, "predict_tip"))
+        self._input.setToolTip(t(lang, "type_tip"))
         self._input.set_clear_labels(t(lang, "clear"), t(lang, "clear_tip"))
         self._audio_cycle.setToolTip(t(lang, "retry_tip"))
         self._typed_cycle.setToolTip(t(lang, "retry_tip"))
-        self._meet_title.setText(t(lang, "meeting"))
+        kind_key = "kind_playback" if self._record_kind == "playback" else "kind_meeting"
+        self._meet_title.setText(t(lang, kind_key if self._meeting_on else "meeting"))
+        self._meet_title.setToolTip(t(lang, "playback_tip" if self._record_kind == "playback" else "meet_tip"))
         self._meet_tag.setText(t(lang, "live"))
-        self._meet_btn.setText(t(lang, "stop_save" if self._meeting_on else "record"))
-        self._meet_btn.setToolTip(t(lang, "meet_tip"))
+        self._meet_tag.setToolTip(t(lang, "hearing_tip"))
+        self._meet_live.setToolTip(t(lang, "hearing_tip"))
+        recording = self._meeting_on
+        self._record_btn.setText(t(lang, "stop_save" if recording else "record"))
+        self._record_btn.setToolTip(t(lang, "meet_tip" if recording else "record_menu_tip"))
+        self._meet_btn.setText(t(lang, "stop_save" if recording else "record"))
+        self._meet_btn.setToolTip(t(lang, "meet_tip" if self._record_kind != "playback" else "playback_tip"))
         self._meet_notes.setPlaceholderText(t(lang, "meet_hint"))
+        self._meet_notes.setToolTip(t(lang, "meet_hint"))
+        self._act_meeting.setText(t(lang, "record_meeting"))
+        self._act_meeting.setToolTip(t(lang, "meet_tip"))
+        self._act_playback.setText(t(lang, "record_playback"))
+        self._act_playback.setToolTip(t(lang, "playback_tip"))
 
     def set_opacity(self, percent: int) -> None:
         self._opacity = max(OPACITY_MIN, min(OPACITY_MAX, percent))
         self.update()
 
     def _on_mic_toggled(self, checked: bool) -> None:
-        self._sync_mic_dot()
         self.enable_toggled.emit(checked)
 
-    def _sync_mic_dot(self) -> None:
-        if not self._enable.isChecked():
-            state = "off"
-        elif self._status_key in ("listening", "locked", "recording", "uncertain"):
-            state = "live"
-        else:
-            state = "wait"
-        self._enable.setProperty("mic", state)
-        style = self._enable.style()
-        if style is not None:
-            style.unpolish(self._enable)
-            style.polish(self._enable)
-        self._enable.update()
-
     def _on_settings_expanded(self, opened: bool) -> None:
+        self._settings_btn.setText(t(self._lang, "hide" if opened else "settings"))
+        self._settings_btn.setToolTip(t(self._lang, "hide_tip" if opened else "settings_tip"))
         self._fit_settings(opened)
         QTimer.singleShot(0, self._refit_settings)
 
@@ -543,14 +630,33 @@ class Overlay(QWidget):
                 self.resize(closed)
         self.clamp_to_screen()
 
-    def _toggle_meeting(self) -> None:
-        self.meeting_toggled.emit(not self._meeting_on)
+    def _on_record_clicked(self) -> None:
+        if self._meeting_on:
+            self._stop_recording()
+            return
+        point = self._record_btn.mapToGlobal(self._record_btn.rect().bottomLeft())
+        self._record_menu.exec(point)
 
-    def set_meeting_recording(self, active: bool, _path: str = "") -> None:
+    def _stop_recording(self) -> None:
+        self.record_stop_requested.emit()
+
+    def _toggle_meeting(self) -> None:
+        if self._meeting_on:
+            self._stop_recording()
+            return
+        self.record_start_requested.emit("meeting")
+        self.meeting_toggled.emit(True)
+
+    def set_meeting_recording(self, active: bool, _path: str = "", kind: str = "meeting") -> None:
         self._meeting_on = active
+        self._record_kind = kind if active else ""
+        self._record_btn.setText(t(self._lang, "stop_save" if active else "record"))
+        self._record_btn.setObjectName("danger" if active else "primary")
+        _polish_widget(self._record_btn)
         self._meet_btn.setText(t(self._lang, "stop_save" if active else "record"))
         self._meet_btn.setObjectName("danger" if active else "primary")
         _polish_widget(self._meet_btn)
+        self._meet_frame.setVisible(active)
         self._meet_live_row.setVisible(active)
         self._meet_notes.setVisible(active)
         policy = QSizePolicy.Policy.Expanding if active else QSizePolicy.Policy.Minimum
@@ -562,7 +668,9 @@ class Overlay(QWidget):
         self._slack.setVisible(not active)
         _set_active(self._meet_frame, active)
         self._audio_frame.setEnabled(not active)
+        self._typed_frame.setEnabled(not active)
         self._copy_btn.setEnabled(not active)
+        self._history_btn.setEnabled(not active)
         self._audio_cycle.setVisible(False)
         self._typed_cycle.setVisible(False)
         self._input.set_predict_enabled(self._predict_want and not active)
@@ -570,9 +678,17 @@ class Overlay(QWidget):
             self._copy_btn.setToolTip(t(self._lang, "copy_meet_tip"))
             self._set_elided(self._meet_live, "…", live=True, state="live")
             self._meet_notes.setPlainText("")
+            kind_key = "kind_playback" if kind == "playback" else "kind_meeting"
+            self._meet_title.setText(t(self._lang, kind_key))
+            self._meet_title.setToolTip(
+                t(self._lang, "playback_tip" if kind == "playback" else "meet_tip")
+            )
         else:
             self._copy_btn.setToolTip(t(self._lang, "copy_tip"))
-        self._sync_mic_dot()
+            self._meet_title.setText(t(self._lang, "meeting"))
+        self._record_btn.setToolTip(
+            t(self._lang, "meet_tip" if active else "record_menu_tip")
+        )
 
     def show_meeting_partial(self, text: str) -> None:
         preview = live_preview(text)
@@ -730,6 +846,7 @@ def _paint_elided(label: QLabel, text: str, *, live: bool, state: str = "empty")
         source = "…"
     label.setText(metrics.elidedText(source, Qt.TextElideMode.ElideRight, width))
     label.setStyleSheet(_field_chrome(state, size=13, pad="4px 10px", radius=6))
+    label.setToolTip(text.strip() if text.strip() else "")
 
 
 def _status_chrome(status: str) -> str:
@@ -787,6 +904,45 @@ def _set_body(label: QLabel, text: str, empty: str = _EMPTY, *, state: str = "em
     label.setText(text.strip() if filled else empty)
     tone = state if state in _TEXT_TONE else ("ready" if filled else "empty")
     label.setStyleSheet(_field_chrome(tone, size=15, pad="10px 12px", radius=8))
+    label.setToolTip(text.strip() if filled else empty)
+
+
+def _role_tag(text: str, parent: QWidget | None = None) -> QLabel:
+    tag = QLabel(text, parent)
+    tag.setObjectName("roleTag")
+    return tag
+
+
+def _section_rule(parent: QWidget | None = None) -> QFrame:
+    line = QFrame(parent)
+    line.setObjectName("sectionRule")
+    line.setFixedHeight(8)
+    return line
+
+
+def _correction_radios(parent: QWidget | None = None) -> tuple[QRadioButton, QRadioButton, QWidget]:
+    row = QWidget(parent)
+    row.setObjectName("modeRow")
+    human = QRadioButton("☺", row)
+    ai = QRadioButton("✦", row)
+    icon_font = QFont("Segoe UI Symbol", 11)
+    if not icon_font.exactMatch():
+        icon_font = QFont("Segoe UI", 11)
+    for button, name in ((human, "Human"), (ai, "AI")):
+        button.setObjectName("modeRadio")
+        button.setAccessibleName(name)
+        button.setAutoExclusive(False)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setFont(icon_font)
+        button.setFixedHeight(22)
+        pointing(button)
+    human.setChecked(True)
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(2)
+    layout.addWidget(human)
+    layout.addWidget(ai)
+    return human, ai, row
 
 
 def _icon_button(mark: str, parent: QWidget | None = None) -> QToolButton:
@@ -806,10 +962,17 @@ def _result_panel(
     *,
     live_tag: str | None = None,
     extra: QWidget | None = None,
+    header_extra: QWidget | None = None,
+    role: str = "",
     parent: QWidget | None = None,
 ) -> tuple[QFrame, QLabel, QLabel, QLabel, QLabel, QToolButton]:
     frame = QFrame(parent)
-    frame.setObjectName("panel")
+    if role == "voice":
+        frame.setObjectName("voicePanel")
+    elif role == "type":
+        frame.setObjectName("typePanel")
+    else:
+        frame.setObjectName("panel")
     frame.setProperty("active", "false")
     header = QLabel(title)
     header.setObjectName("sectionTitle")
@@ -830,7 +993,14 @@ def _result_panel(
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(12, 10, 12, 12)
     layout.setSpacing(8)
-    layout.addWidget(header)
+    head = QHBoxLayout()
+    head.setContentsMargins(0, 0, 0, 0)
+    head.setSpacing(8)
+    head.addWidget(header, 0, Qt.AlignmentFlag.AlignVCenter)
+    head.addStretch(1)
+    if header_extra is not None:
+        head.addWidget(header_extra, 0, Qt.AlignmentFlag.AlignVCenter)
+    layout.addLayout(head)
     live: QLabel
     if live_tag is not None:
         live_row, live, tag = _tagged_line(live_tag, "#b8b8bc")
@@ -854,15 +1024,13 @@ def _meeting_panel(
     frame = QFrame(parent)
     frame.setObjectName("panel")
     frame.setProperty("active", "false")
-    header = QLabel("Meeting")
+    header = QLabel("Recording")
     header.setObjectName("sectionTitle")
-    button = QPushButton("Record")
-    button.setObjectName("primary")
+    button = QPushButton("Stop")
+    button.setObjectName("danger")
     pointing(button)
     button.setToolTip(
-        "Transcribe this room and save notes to the desktop. "
-        "Captures the microphone and what you hear on speakers or headphones. "
-        "Speech goes to the file, not the clipboard."
+        "Stop recording and save the transcript to the desktop."
     )
     top = QHBoxLayout()
     top.setContentsMargins(0, 0, 0, 0)

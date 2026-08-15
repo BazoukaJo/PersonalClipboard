@@ -20,3 +20,4 @@ class UiBridge(QObject):
     ollama_models = pyqtSignal(object)
     predicted = pyqtSignal(str, str)
     type_focus_requested = pyqtSignal()
+    record_corrected = pyqtSignal(str)

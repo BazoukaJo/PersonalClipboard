@@ -54,10 +54,12 @@ def test_i18n_french_mic() -> None:
 
 
 def test_i18n_languages_cover_english_keys() -> None:
-    from personalclipboard.ui.i18n import STRINGS
+    from personalclipboard.ui.i18n import LANG_CODES, STRINGS
 
     english = set(STRINGS["en"])
-    for lang in ("fr", "es", "de"):
+    for lang in LANG_CODES:
+        if lang == "en":
+            continue
         missing = english - set(STRINGS[lang])
         assert not missing, f"{lang} missing {sorted(missing)}"
 

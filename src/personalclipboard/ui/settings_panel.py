@@ -73,7 +73,8 @@ class SettingsPanel(QFrame):
         self._scroll.setWidget(self._body)
         self._scroll.setVisible(False)
         self._scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        top = QHBoxLayout()
+        self._chrome = QWidget(self)
+        top = QHBoxLayout(self._chrome)
         top.setContentsMargins(0, 0, 0, 0)
         top.addWidget(self._header)
         top.addStretch(1)
@@ -82,7 +83,7 @@ class SettingsPanel(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetDefaultConstraint)
-        layout.addLayout(top)
+        layout.addWidget(self._chrome)
         layout.addWidget(self._scroll, 0)
         self._apply_shell(False)
         self.retranslate("en")
@@ -150,12 +151,18 @@ class SettingsPanel(QFrame):
     def retranslate(self, lang: str) -> None:
         self._lang = lang
         self._header.setText(t(lang, "settings"))
+        self._header.setToolTip(t(lang, "settings_tip"))
         self._toggle.setText(t(lang, "hide") if self._open else t(lang, "settings"))
+        self._toggle.setToolTip(t(lang, "hide_tip" if self._open else "settings_tip"))
         self._lang_label.setText(t(lang, "language"))
+        self._lang_label.setToolTip(t(lang, "language_tip"))
+        self._lang_box.setToolTip(t(lang, "language_tip"))
         self._opacity_label.setText(t(lang, "opacity"))
         self._opacity.setToolTip(t(lang, "opacity_tip"))
         self._whisper_label.setText(t(lang, "whisper"))
+        self._whisper.setToolTip(t(lang, "whisper_tip"))
         self._ollama_label.setText(t(lang, "corrector"))
+        self._ollama.setToolTip(t(lang, "corrector_tip"))
         self._vad.setText(t(lang, "vad"))
         self._vad.setToolTip(t(lang, "vad_tip"))
         self._predict.setText(t(lang, "predict"))
@@ -239,6 +246,8 @@ class SettingsPanel(QFrame):
 
     def _apply_shell(self, opened: bool) -> None:
         self._header.setVisible(opened)
+        self._toggle.setVisible(opened)
+        self._chrome.setVisible(opened)
         self.setObjectName("panel" if opened else "settingsDock")
         layout = self.layout()
         if layout is not None:
@@ -249,6 +258,9 @@ class SettingsPanel(QFrame):
                 layout.setContentsMargins(0, 0, 0, 0)
                 layout.setSpacing(0)
         self._polish()
+
+    def toggle(self) -> None:
+        self._flip()
 
     def _polish(self) -> None:
         style = self.style()

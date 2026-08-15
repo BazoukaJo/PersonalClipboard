@@ -34,15 +34,20 @@ def desktop_directory() -> Path:
     return fallback
 
 
-def meeting_filename(when: datetime, existing: list[str] | None = None) -> str:
+def meeting_filename(
+    when: datetime,
+    existing: list[str] | None = None,
+    kind: str = "meeting",
+) -> str:
     stamp = when.strftime("%Y-%m-%d %H%M")
-    base = f"Meeting {stamp}.md"
+    prefix = "Playback" if kind == "playback" else "Meeting"
+    base = f"{prefix} {stamp}.md"
     names = set(existing or [])
     if base not in names:
         return base
     index = 2
     while True:
-        candidate = f"Meeting {stamp} {index}.md"
+        candidate = f"{prefix} {stamp} {index}.md"
         if candidate not in names:
             return candidate
         index += 1
@@ -51,14 +56,25 @@ def meeting_filename(when: datetime, existing: list[str] | None = None) -> str:
 class MeetingNotes:
     """Append-only markdown notes. Flushes each line so a crash still keeps text."""
 
-    def __init__(self, directory: Path, started: datetime, source: str) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        started: datetime,
+        source: str,
+        *,
+        kind: str = "meeting",
+    ) -> None:
         directory.mkdir(parents=True, exist_ok=True)
-        existing = [path.name for path in directory.glob("Meeting *.md")]
-        self.path = directory / meeting_filename(started, existing)
+        self.kind = "playback" if kind == "playback" else "meeting"
+        pattern = "Playback *.md" if self.kind == "playback" else "Meeting *.md"
+        existing = [path.name for path in directory.glob(pattern)]
+        self.path = directory / meeting_filename(started, existing, kind=self.kind)
         self._started = started
         self._lines: list[str] = []
+        title = "Playback notes" if self.kind == "playback" else "Meeting notes"
         header = (
-            f"# Meeting notes\n\n"
+            f"# {title}\n\n"
+            f"- Kind: {self.kind}\n"
             f"- Started: {started.strftime('%A, %d %B %Y, %H:%M')}\n"
             f"- Source: {source}\n"
             f"- Local transcript only. Audio is not saved.\n\n"
@@ -72,6 +88,8 @@ class MeetingNotes:
     def append(self, text: str, when: datetime | None = None) -> None:
         stripped = " ".join(text.split())
         if not stripped:
+            return
+        if self._is_slide_repeat(stripped):
             return
         stamp = (when or datetime.now()).strftime("%H:%M")
         line = f"- **{stamp}** {stripped}"
@@ -91,6 +109,36 @@ class MeetingNotes:
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(f"\n- Ended: {ended}\n")
             handle.flush()
+
+    def read_text(self) -> str:
+        try:
+            return self.path.read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
+    def _is_slide_repeat(self, text: str) -> bool:
+        if not self._lines:
+            return False
+        previous = _line_body(self._lines[-1])
+        return _keys_are_suffix(text, previous)
+
+
+def _line_body(line: str) -> str:
+    marker = "** "
+    index = line.find(marker)
+    if index < 0:
+        return line.lstrip("- ").strip()
+    return line[index + len(marker) :].strip()
+
+
+def _keys_are_suffix(shorter: str, longer: str) -> bool:
+    left = [word.lower().strip(".,?!:;") for word in shorter.split() if word.strip(".,?!:;")]
+    right = [word.lower().strip(".,?!:;") for word in longer.split() if word.strip(".,?!:;")]
+    if not left or not right or len(left) > len(right):
+        return False
+    if left == right:
+        return True
+    return right[-len(left) :] == left
 
 
 def _known_folder_desktop() -> Path | None:

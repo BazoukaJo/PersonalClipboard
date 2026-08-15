@@ -12,8 +12,9 @@ Local Windows dictation overlay. Audio, transcripts, clipboard, and LLM stay on 
 - Latency-first: overlay partials under ~400 ms; clipboard commit under ~1 s after end of sentence.
 - Never send partial ASR hypotheses to Ollama. Correct on sentence commit or `Ctrl+Shift+A` only. Type-field ghost completion may use the same localhost model while that field is focused (Tab accepts).
 - Default models: Faster-Whisper `large-v3-turbo` FP16 on CUDA; `qwen2.5:1.5b` for correction so the 16 GB card keeps headroom.
-- `Ctrl+Shift+A` reformats the current clipboard (works with capture off).
+- `Ctrl+Shift+A` reformats the current clipboard (works with capture off). Type radios choose human vs AI rewrite; Voice dictation always stays human-readable.
 - `Ctrl+Shift+R` focuses Type; again returns focus to the last other-app text field (Explorer included).
+- Meeting Record mixes mic + speakers to desktop markdown. Playback Record is speakers only (YouTube/other apps). Records modal lists those files. Do not copy record phrases to the clipboard.
 - Do not persist microphone audio unless an explicit debug flag is on; never commit recordings.
 
 See `AGENTS.md` and `docs/ARCHITECTURE.md`.

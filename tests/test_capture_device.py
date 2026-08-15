@@ -87,6 +87,9 @@ def test_start_loopback_uses_render_capture(monkeypatch) -> None:
     assert cap.loopback_active is True
     assert cap.loopback_name == "Headphones (JBL)"
     cap.stop()
+    assert fake.stopped is False
+    assert cap.loopback_active is True
+    cap.stop_loopback()
     assert fake.stopped is True
     assert cap.loopback_active is False
 

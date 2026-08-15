@@ -50,7 +50,7 @@ class AsrEngine:
         self._quiet = QuietIdle(settings.vad_silence_ms)
         self._last_command: str | None = None
         self._last_command_at = 0.0
-        self._meeting_mode = False
+        self._record_mode = ""
         self._state_lock = threading.Lock()
 
     def set_loop_ring(self, ring: RingBuffer | None) -> None:
@@ -60,6 +60,10 @@ class AsrEngine:
     @property
     def ready(self) -> bool:
         return self._model is not None
+
+    @property
+    def running(self) -> bool:
+        return self._enabled.is_set() and not self._shutdown.is_set()
 
     @property
     def load_error(self) -> str | None:
@@ -85,15 +89,20 @@ class AsrEngine:
             if self._on_error:
                 self._on_error(f"ASR load failed: {exc}")
 
-    def set_meeting_mode(self, enabled: bool) -> None:
-        """Meeting notes: all speakers, pause commits, no voice commands."""
+    def set_record_mode(self, mode: str) -> None:
+        """None/empty = dictation. meeting = mic+speakers. playback = speakers only."""
+        normalized = mode if mode in ("meeting", "playback") else ""
         with self._state_lock:
-            self._meeting_mode = enabled
-            self._assembler.set_pause_commit(enabled)
+            self._record_mode = normalized
+            self._assembler.set_pause_commit(bool(normalized))
             self._assembler.reset()
             self._gate.reset()
             self._quiet.reset()
             self._last_command = None
+
+    def set_meeting_mode(self, enabled: bool) -> None:
+        """Meeting notes: all speakers, pause commits, no voice commands."""
+        self.set_record_mode("meeting" if enabled else "")
 
     def flush_remainder(self) -> str:
         with self._state_lock:
@@ -153,15 +162,20 @@ class AsrEngine:
             return
         audio = self._ring.window_float32(self._settings.window_seconds, self._settings.sample_rate)
         min_samples = int(self._settings.sample_rate * 0.2)
-        meeting = self._meeting_mode
-        if meeting and self._loop_ring is not None:
+        mode = self._record_mode
+        if mode == "playback" and self._loop_ring is not None:
+            audio = self._loop_ring.window_float32(
+                self._settings.window_seconds, self._settings.sample_rate
+            )
+        elif mode == "meeting" and self._loop_ring is not None:
             loop = self._loop_ring.window_float32(
                 self._settings.window_seconds, self._settings.sample_rate
             )
             audio = mix_windows(audio, loop)
         if audio.size < min_samples:
             return
-        if meeting:
+        recording = bool(mode)
+        if recording:
             energy = float(np.sqrt(np.mean(np.square(audio.astype(np.float64)))))
             if energy < 0.008:
                 self._finish_tick("", 1.0, 0.0, audio)
@@ -174,7 +188,7 @@ class AsrEngine:
             beam_size=self._settings.beam_size_partial,
             condition_on_previous_text=self._settings.condition_on_previous_text,
         )
-        if not meeting:
+        if not recording:
             command = match_command(text)
             if command:
                 self._emit_command(command)
@@ -204,7 +218,7 @@ class AsrEngine:
 
     def _finish_tick(self, text: str, no_speech: float, avg_lp: float, audio: np.ndarray) -> None:
         with self._state_lock:
-            meeting = self._meeting_mode
+            recording = bool(self._record_mode)
             partial, commit, status = self._assembler.update(
                 text,
                 no_speech,
@@ -212,7 +226,7 @@ class AsrEngine:
                 no_speech_max=self._settings.no_speech_prob_max,
                 logprob_min=self._settings.avg_logprob_min,
             )
-        if meeting and status == "listening":
+        if recording and status == "listening":
             status = "recording"
         elif self._gate.enrolled and status == "listening":
             status = "locked"
@@ -222,7 +236,7 @@ class AsrEngine:
             self._on_partial(partial)
         if status == "uncertain" or not commit:
             return
-        if not meeting:
+        if not recording:
             command = match_command(commit)
             if command:
                 self._emit_command(command)

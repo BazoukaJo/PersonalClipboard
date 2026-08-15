@@ -80,3 +80,59 @@ def test_voice_command_commits_without_period() -> None:
         logprob_min=-1.2,
     )
     assert commit == "paste last"
+
+
+def _hop(asm: SentenceAssembler, text: str, *, quiet: bool = False) -> str | None:
+    _, commit, _ = asm.update(
+        text,
+        no_speech_prob=0.9 if quiet else 0.1,
+        avg_logprob=-0.2,
+        no_speech_max=0.65,
+        logprob_min=-1.2,
+    )
+    return commit
+
+
+def test_overlapping_windows_do_not_recommit_in_dictation() -> None:
+    asm = SentenceAssembler(min_chars=4)
+    assert _hop(asm, "hello there.") == "hello there."
+    assert _hop(asm, "there.") is None
+    assert _hop(asm, "there.") is None
+
+
+def test_meeting_stitches_sliding_windows_until_pause() -> None:
+    asm = SentenceAssembler(min_chars=4)
+    asm.set_pause_commit(True)
+    windows = [
+        "that from its shadows.",
+        "from its shadows.",
+        "its shadows.",
+        "shadows is very clean.",
+        "Shadows is very clean and distinct.",
+        "It's very clean and distinctive.",
+        "is very clean and distinctive shadows.",
+        "very clean and distinctive shadows.",
+        "clean and distinctive shadows.",
+        "and distinctive shadows.",
+        "distinctive shadows.",
+        "shadows.",
+    ]
+    commits = [commit for window in windows if (commit := _hop(asm, window))]
+    assert commits == []
+    assert _hop(asm, "", quiet=True) is None
+    assert _hop(asm, "", quiet=True) is None
+    final = _hop(asm, "", quiet=True)
+    assert final is not None
+    lower = final.lower()
+    assert "shadows" in lower
+    assert "clean" in lower
+    assert lower.count("shadows") == 1
+
+
+def test_meeting_commits_when_next_sentence_starts() -> None:
+    asm = SentenceAssembler(min_chars=4)
+    asm.set_pause_commit(True)
+    assert _hop(asm, "the lighting is harsh.") is None
+    commit = _hop(asm, "lighting is harsh. Next shot is ready.")
+    assert commit == "the lighting is harsh."
+    assert "Next shot is ready." in (asm._acc or "")

@@ -34,6 +34,7 @@ from personalclipboard.ui.bridge import UiBridge
 from personalclipboard.ui.copy_cue import play_copy_cue
 from personalclipboard.ui.history_dialog import HistoryDialog
 from personalclipboard.ui.overlay import Overlay
+from personalclipboard.ui.records_dialog import RecordsDialog
 from personalclipboard.ui.tray import make_tray_icon, show_about, spawn_new_instance
 from personalclipboard.windows.input import WindowInput
 
@@ -80,6 +81,7 @@ class PersonalClipboardApp(QObject):
             self._corrector,
             self._emit_corrected,
             self._emit_predicted,
+            self._emit_record_corrected,
         )
         self._overlay = Overlay()
         clipboard = qt.clipboard()
@@ -100,6 +102,8 @@ class PersonalClipboardApp(QObject):
         self._stopped = False
         self._meeting: MeetingNotes | None = None
         self._meeting_owned_capture = False
+        self._record_kind = ""
+        self._record_owned_asr = False
         self._vad_sleeping = False
         self._want_mic = False
         self._start_mic_on_ready = True
@@ -125,6 +129,7 @@ class PersonalClipboardApp(QObject):
         self._overlay.apply_language(self._settings.ui_language)
         self._overlay.set_opacity(self._settings.overlay_opacity)
         self._overlay.set_predict_enabled(self._settings.predict_enabled)
+        self._overlay.set_correction_mode(self._settings.correction_mode)
         self._connect_signals()
         self._overlay.set_listen_enabled(False)
         self._overlay.set_status("loading")
@@ -156,14 +161,19 @@ class PersonalClipboardApp(QObject):
         _queue(self._bridge.ollama_models, self._fill_settings, queued)
         _queue(self._bridge.predicted, self._on_predicted, queued)
         _queue(self._bridge.type_focus_requested, self._on_type_focus, queued)
+        _queue(self._bridge.record_corrected, self._on_record_corrected, queued)
         self._overlay.enable_toggled.connect(self._set_capture)
         self._overlay.hide_requested.connect(self._overlay.hide)
         self._overlay.copy_requested.connect(self._copy_ready)
         self._overlay.history_requested.connect(self._open_history)
+        self._overlay.records_requested.connect(self._open_records)
         self._overlay.phrase_completed.connect(self._on_typed_commit)
         self._overlay.prediction_requested.connect(self._on_prediction_requested)
         self._overlay.meeting_toggled.connect(self._on_meeting_toggled)
+        self._overlay.record_start_requested.connect(self._start_record)
+        self._overlay.record_stop_requested.connect(self._on_record_stop)
         self._overlay.retry_requested.connect(self._on_retry_requested)
+        self._overlay.correction_mode_changed.connect(self._on_correction_mode_changed)
         panel = self._overlay.settings
         panel.language_changed.connect(self._on_language_changed)
         panel.opacity_changed.connect(self._on_opacity_changed)
@@ -178,6 +188,9 @@ class PersonalClipboardApp(QObject):
 
     def _emit_predicted(self, prefix: str, suffix: str) -> None:
         self._bridge.predicted.emit(prefix, suffix)
+
+    def _emit_record_corrected(self, text: str) -> None:
+        self._bridge.record_corrected.emit(text)
 
     def _init_tray(self, qt: QApplication) -> None:
         icon = make_tray_icon()
@@ -291,7 +304,8 @@ class PersonalClipboardApp(QObject):
                 return
             try:
                 self._capture.start()
-                self._asr.start()
+                if self._meeting is None:
+                    self._asr.start()
             except Exception as exc:
                 self._overlay.set_enable_checked(False)
                 self._overlay.set_status("error")
@@ -305,9 +319,15 @@ class PersonalClipboardApp(QObject):
                 f"Listening on {mic}{extra}. Finish with a period to copy."
             )
             return
+        if self._meeting is not None and self._record_kind == "playback":
+            self._capture.stop()
+            self._overlay.set_status("recording")
+            self._overlay.set_message("Mic off. Playback recording continues from speakers.")
+            return
         if self._meeting is not None:
             self._stop_meeting(restore_mic=False)
         self._asr.stop()
+        self._capture.stop_loopback()
         self._capture.stop()
         self._overlay.set_status("off")
         self._overlay.show_partial("")
@@ -315,8 +335,8 @@ class PersonalClipboardApp(QObject):
 
     def _on_speech_commit(self, text: str) -> None:
         if self._meeting is not None:
-            self._meeting.append(text)
-            self._overlay.show_meeting_notes(self._meeting.preview())
+            self._llm.submit_record(text)
+            self._overlay.set_message("Correcting…")
             return
         self._finish_phrase(text, "audio")
 
@@ -334,7 +354,7 @@ class PersonalClipboardApp(QObject):
         else:
             self._overlay.show_audio_phrase(text, state="correcting")
         self._overlay.set_message("Correcting…")
-        self._llm.submit(text)
+        self._llm.submit(text, mode=self._correction_mode_for(source))
 
     def _on_corrected(self, text: str) -> None:
         if self._stopped or not text.strip():
@@ -361,7 +381,13 @@ class PersonalClipboardApp(QObject):
         else:
             self._overlay.show_audio_phrase(current, state="correcting")
         self._overlay.set_message("Correcting…")
-        self._llm.submit(original, temperature=temperature, seed=seed, vary=True)
+        self._llm.submit(
+            original,
+            temperature=temperature,
+            seed=seed,
+            vary=True,
+            mode=self._correction_mode_for(self._commit_source),
+        )
 
     def _publish_phrase(self, text: str, *, log: bool) -> None:
         stripped = text.strip()
@@ -389,7 +415,7 @@ class PersonalClipboardApp(QObject):
         self._commit_source = "typed"
         self._typed_original = current
         self._overlay.show_typed_phrase(current, state="correcting")
-        self._llm.submit(current)
+        self._llm.submit(current, mode=self._correction_mode_for("typed"))
 
     def _on_command(self, command: str) -> None:
         if command == "paste_last":
@@ -447,67 +473,111 @@ class PersonalClipboardApp(QObject):
     def _on_error(self, message: str) -> None:
         self._overlay.set_message(message)
 
+    def _on_record_corrected(self, text: str) -> None:
+        notes = self._meeting
+        if notes is None or self._stopped or not text.strip():
+            return
+        notes.append(text)
+        self._overlay.show_meeting_notes(notes.preview())
+
     def _on_meeting_toggled(self, want: bool) -> None:
         if want:
-            self._start_meeting()
+            self._start_record("meeting")
             return
         self._stop_meeting()
 
+    def _on_record_stop(self) -> None:
+        self._stop_meeting()
+
     def _start_meeting(self) -> None:
+        self._start_record("meeting")
+
+    def _start_record(self, kind: str = "meeting") -> None:
         if self._meeting is not None:
             return
+        kind = "playback" if kind == "playback" else "meeting"
         self._probe.stop()
         self._vad_sleeping = False
         if not self._asr.ready:
             self._overlay.set_message("Waiting for Whisper to load…")
             return
-        owned = False
-        if not self._capture.active:
+        owned_mic = False
+        owned_asr = False
+        if kind == "meeting" and not self._capture.active:
             try:
                 self._capture.start()
-                self._asr.start()
+                if not self._asr.running:
+                    self._asr.start()
             except Exception as exc:
                 self._overlay.set_message(str(exc))
                 return
-            owned = True
+            owned_mic = True
+            self._want_mic = True
             self._overlay.set_enable_checked(True)
+        elif kind == "playback":
+            try:
+                if not self._asr.running:
+                    self._asr.start()
+                    owned_asr = not self._want_mic
+            except Exception as exc:
+                self._overlay.set_message(str(exc))
+                return
         self._capture.ring.clear()
         self._capture.loop_ring.clear()
         loop_ok = self._capture.start_loopback()
-        self._asr.set_meeting_mode(True)
-        source = self._capture.device_name or "microphone"
-        if loop_ok and self._capture.loopback_name:
-            source = f"{source} + {self._capture.loopback_name}"
+        self._asr.set_record_mode(kind)
+        if kind == "playback":
+            source = self._capture.loopback_name or "speakers"
+        else:
+            source = self._capture.device_name or "microphone"
+            if loop_ok and self._capture.loopback_name:
+                source = f"{source} + {self._capture.loopback_name}"
         try:
-            notes = MeetingNotes(desktop_directory(), datetime.now(), source)
+            notes = MeetingNotes(desktop_directory(), datetime.now(), source, kind=kind)
         except OSError as exc:
-            self._asr.set_meeting_mode(False)
+            self._asr.set_record_mode("")
             self._capture.stop_loopback()
-            if owned:
+            if owned_mic:
                 self._overlay.set_enable_checked(False)
                 self._set_capture(False)
+            elif owned_asr and not self._want_mic:
+                self._asr.stop()
             self._overlay.set_message(f"Could not create notes file: {exc}")
             return
         self._meeting = notes
-        self._meeting_owned_capture = owned
-        self._overlay.set_meeting_recording(True, notes.filename)
+        self._record_kind = kind
+        self._meeting_owned_capture = owned_mic
+        self._record_owned_asr = owned_asr
+        self._overlay.set_meeting_recording(True, notes.filename, kind=kind)
         self._overlay.set_status("recording")
+        if kind == "playback" and not loop_ok:
+            self._overlay.set_message(
+                "Speaker capture unavailable. Playback needs headphones or speakers."
+            )
+            self._stop_meeting(restore_mic=False)
+            return
+        if kind == "playback":
+            self._overlay.set_message(
+                f"Recording speakers only ({source}). "
+                f"Notes save to the desktop as {notes.filename}."
+            )
+            return
         if loop_ok:
             self._overlay.set_message(
                 f"Recording microphone and speakers on {source}. "
                 f"Notes save to the desktop as {notes.filename}."
             )
-        else:
-            self._overlay.set_message(
-                f"Recording microphone only on {source} "
-                f"(speaker capture unavailable). Notes save as {notes.filename}."
-            )
+            return
+        self._overlay.set_message(
+            f"Recording microphone only on {source} "
+            f"(speaker capture unavailable). Notes save as {notes.filename}."
+        )
 
     def _stop_meeting(self, *, restore_mic: bool = True) -> None:
         notes = self._meeting
         self._meeting = None
         leftover = self._asr.flush_remainder()
-        self._asr.set_meeting_mode(False)
+        self._asr.set_record_mode("")
         self._capture.stop_loopback()
         saved = ""
         if notes is not None:
@@ -524,10 +594,19 @@ class PersonalClipboardApp(QObject):
         else:
             self._overlay.set_meeting_recording(False)
         owned = self._meeting_owned_capture
+        owned_asr = self._record_owned_asr
         self._meeting_owned_capture = False
+        self._record_owned_asr = False
+        self._record_kind = ""
         if restore_mic and owned:
             self._overlay.set_enable_checked(False)
             self._set_capture(False)
+            if saved:
+                self._overlay.set_message(f"Meeting notes saved as {saved} on the desktop.")
+            return
+        if owned_asr and not self._want_mic:
+            self._asr.stop()
+            self._overlay.set_status("off")
             if saved:
                 self._overlay.set_message(f"Meeting notes saved as {saved} on the desktop.")
             return
@@ -561,6 +640,20 @@ class PersonalClipboardApp(QObject):
                 return
             self._overlay.set_status("listening")
 
+    def _correction_mode_for(self, source: str) -> str:
+        if source == "typed" and self._overlay.correction_mode() == "ai":
+            return "ai"
+        return "human"
+
+    def _on_correction_mode_changed(self, mode: str) -> None:
+        if self._booting:
+            return
+        kind = "ai" if mode == "ai" else "human"
+        if kind == self._settings.correction_mode:
+            return
+        self._settings.correction_mode = kind
+        self._persist_settings()
+
     def _schedule_persist(self) -> None:
         if self._booting or self._stopped:
             return
@@ -592,6 +685,16 @@ class PersonalClipboardApp(QObject):
             self._overlay,
         )
         dialog.copy_requested.connect(self._copy_history_entry)
+        dialog.exec()
+
+    def _open_records(self) -> None:
+        from personalclipboard.notes.library import list_records
+
+        dialog = RecordsDialog(
+            list_records(desktop_directory()),
+            self._settings.ui_language,
+            self._overlay,
+        )
         dialog.exec()
 
     def _copy_history_entry(self, text: str) -> None:

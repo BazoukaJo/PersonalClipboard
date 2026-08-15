@@ -17,7 +17,7 @@ Mic (WASAPI via PyAudio, sounddevice fallback)
 Type field (focused only) → debounce → LLM worker complete → grey ghost; Tab inserts
 Quiet (app VAD, Mic ON) → stop stream + idle CUDA; short probe wakes on speech
 Enable switch OFF → stop stream, stop probe, idle ASR (no wake)
-Ctrl+Shift+A → LLM worker (dictation prompt) → QClipboard
+Ctrl+Shift+A → LLM worker (Type human or AI prompt) → QClipboard
 Ctrl+Shift+R → Type field; again → last other-app text field
 Meeting Record → WASAPI loopback of speakers/headphones + mic ring → mix on ASR hop
 ```
@@ -108,14 +108,14 @@ No pyannote on the hot path.
 
 - Ambient: commit → (optional) Ollama → `QClipboard.setText`.
 - Type field: while focused, debounce → same Ollama model as a **continuation** (not a rewrite). Grey ghost; Tab inserts. Escape clears. Never on ASR partials or Meeting Record.
-- `Ctrl+Shift+A`: read clipboard → Ollama with the dictation system prompt → write back. Independent of enable.
+- `Ctrl+Shift+A`: read clipboard → Ollama with the Type-row prompt (human grammar fix, or AI reformulation) → write back. Independent of enable. Spoken dictation always uses the human prompt.
 - `Ctrl+Shift+R`: focus the Type field. If it already has focus, restore the last foreign window's focused control (Explorer included). Poll records `GetForegroundWindow` + `GetGUIThreadInfo` hwndFocus while the overlay is not foreground.
 - Register hotkeys with `pynput` (global). `QShortcut` only works when the overlay is focused.
 - One process only. A new launch asks the running instance to quit (CUDA unload), then binds the instance socket. If the old process hangs, it is terminated.
 
 ## 9. Meeting notes
 
-Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. While recording, a WASAPI loopback stream copies the default playback mix (communications endpoint first, then console) into a second ring. The ASR hop mixes that ring with the microphone window. Commits append to a desktop markdown file. Audio is not written to disk. The overlay Copy control is disabled while recording. Dictation stays microphone-only; loopback stops when Record stops or Mic turns off.
+Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. While recording, a WASAPI loopback stream copies the default playback mix (communications endpoint first, then console) into a second ring. Meeting mixes that ring with the microphone window. Playback Record uses the loopback ring only (YouTube and other app audio; no microphone). Overlay **Records** lists desktop `Meeting *.md` and `Playback *.md` files; opening a row shows the full note. Commits are stitched overlapping windows, then localhost-corrected, then appended. Audio is not written to disk. The overlay Copy control is disabled while recording. Dictation stays microphone-only; loopback stops when Record stops. Mic OFF stops a meeting; playback can continue with the microphone off.
 
 ## 10. Module map
 
@@ -137,9 +137,11 @@ Meeting Record uses the same ASR worker with VoiceGate lock off and voice comman
 | `ui/settings_panel.py` | Language, opacity, models, VAD, type-ahead toggle |
 | `ui/i18n.py` | en / fr / es / de HUD strings |
 | `hotkeys/bindings.py` | `Ctrl+Shift+A`, `Ctrl+Shift+R` |
-| `modes/ambient.py` | Prose correction prompt |
+| `modes/ambient.py` | Human prose correction and AI reformulation prompts |
 | `modes/complete.py` | Type-ahead continuation prompt |
-| `notes/meeting.py` | Desktop markdown meeting notes |
+| `notes/meeting.py` | Desktop markdown meeting/playback notes |
+| `notes/library.py` | Index desktop transcripts for the Records modal |
+| `ui/records_dialog.py` | Records library + full-note view |
 | `ui/win11_resize.py` | Frameless Win11 resize hit-test |
 | `ui/tray.py` | Tray, About, restart (prefers `dist/.../PersonalClipboard.exe`) |
 

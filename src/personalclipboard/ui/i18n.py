@@ -6,21 +6,30 @@ LANGS = (
     ("en", "English"),
     ("fr", "Français"),
     ("es", "Español"),
-    ("de", "Deutsch"),
 )
+LANG_CODES = tuple(code for code, _name in LANGS)
+
+
+def ui_lang(lang: str) -> str:
+    return lang if lang in LANG_CODES else "en"
+
 
 _EN = {
     "mic": "Mic",
     "copy": "Copy",
-    "history": "History",
+    "history": "Clips",
+    "clips": "Clips",
+    "records": "Records",
     "hide": "Hide",
     "app_title": "Clipboard",
     "voice": "Voice",
     "hearing": "Hearing",
     "type": "Type",
-    "meeting": "Meeting",
+    "meeting": "Recording",
     "record": "Record",
-    "stop_save": "Stop & save",
+    "record_meeting": "Meeting",
+    "record_playback": "Playback",
+    "stop_save": "Stop",
     "settings": "Settings",
     "language": "Language",
     "opacity": "Opacity",
@@ -31,25 +40,70 @@ _EN = {
     "predict": "Suggest while typing",
     "empty": "Ready to paste",
     "type_hint": "Type, Tab to accept, then Enter or a period.",
-    "meet_hint": "Meeting transcript appears here.",
+    "meet_hint": "Finished phrases appear here after correction.",
     "meet_tip": (
-        "Transcribe this room and save notes to the desktop. "
-        "Captures the microphone and what you hear on speakers or headphones. "
-        "Speech goes to the file, not the clipboard."
+        "Meeting: transcribe your microphone and what you hear "
+        "(speakers or headphones). Saves a markdown file on the desktop. "
+        "Does not copy to the clipboard."
     ),
-    "mic_tip": "Off stops the microphone.",
-    "history_tip": "Show clipboard history. Copy any complete entry.",
+    "playback_tip": (
+        "Playback: transcribe only what you hear — YouTube, a video, or another app. "
+        "Uses speakers or headphones, not the microphone. "
+        "Saves a markdown file on the desktop. Does not capture the picture."
+    ),
+    "record_menu_tip": (
+        "Choose Meeting (mic + speakers) or Playback (speakers only, for YouTube and videos)."
+    ),
+    "mic_tip": "Master privacy switch. Off stops the microphone and the wake probe.",
+    "history_tip": "Clipboard history. Open a clip to copy it again.",
+    "clips_tip": "Clipboard history. Open a clip to copy it again.",
+    "records_tip": "Saved meeting and playback transcripts on the desktop.",
+    "records_empty": "No meeting or playback records yet. Use Record to save one.",
+    "records_empty_preview": "No phrases saved in this file.",
+    "records_open_tip": "Open the full transcript.",
     "history_empty": "No clipboard history yet.",
     "history_copy_tip": "Copy this text to the clipboard.",
     "close": "Close",
-    "copy_tip": "Copy the last finished sentence again",
-    "copy_meet_tip": "Speech is saving to meeting notes, not the clipboard.",
-    "hide_tip": "Hide this window. Click the tray icon to show it.",
+    "close_tip": "Close this window.",
+    "back": "Back",
+    "back_tip": "Return to the list of records.",
+    "open_file": "Open file",
+    "open_file_tip": "Open this markdown file in your default app.",
+    "kind_meeting": "Meeting",
+    "kind_playback": "Playback",
+    "copy_tip": "Copy the last finished sentence to the clipboard again.",
+    "copy_meet_tip": "Recording is saving to a desktop file, not the clipboard.",
+    "hide_tip": "Hide this overlay. Click the tray icon to show it again.",
     "vad_tip": "After a short silence, stop the microphone and Whisper. Speech wakes them.",
     "predict_tip": "Grey ghost text in Type while the field is focused. Tab inserts it.",
     "clear": "Clear",
     "clear_tip": "Clear the Type field.",
     "retry_tip": "Try another wording of this sentence.",
+    "settings_tip": "Language, opacity, Whisper model, corrector, idle-mic, and type-ahead.",
+    "language_tip": "Language of this overlay. Speech recognition still auto-detects.",
+    "whisper_tip": "Faster-Whisper model on this PC. Changing it reloads CUDA weights.",
+    "corrector_tip": "Local Ollama model that corrects finished sentences.",
+    "voice_tip": (
+        "Spoken dictation. Separate from Type. Finish with a period to fix "
+        "grammar and copy. Always kept readable for a person."
+    ),
+    "voice_role": "Dictation",
+    "voice_phrase_tip": "Last spoken sentence. Copy puts it on the clipboard again.",
+    "hearing_tip": "What Whisper hears right now. This is a partial, not the saved sentence.",
+    "type_tip": (
+        "Typed text, separate from Voice. Enter or a period corrects and copies. "
+        "The icons next to Type choose human or AI correction. Tab accepts the grey suggestion."
+    ),
+    "type_phrase_tip": "Last typed sentence after correction. Copy puts it on the clipboard again.",
+    "correct_human_tip": (
+        "Human: fix grammar and punctuation. Keep your wording and tone. For people."
+    ),
+    "correct_ai_tip": (
+        "AI: fully reformulate as a prompt for another model. Does not answer the request."
+    ),
+    "phrase_tip": "Last finished sentence. Copy puts it on the clipboard again.",
+    "status_tip": "Capture state. Green is live, grey is idle, red is off.",
+    "brand_tip": "Drag to move this overlay.",
     "status_off": "Mic off",
     "status_loading": "Loading",
     "status_listening": "Listening",
@@ -123,6 +177,61 @@ _FR = {
     "flash_loading": "Chargement",
     "flash_error": "Erreur",
     "live": "Direct",
+    "clips": "Extraits",
+    "records": "Notes",
+    "record_meeting": "Réunion",
+    "record_playback": "Lecture",
+    "stop_save": "Arrêter",
+    "meet_hint": "Les phrases corrigées apparaissent ici.",
+    "meet_tip": (
+        "Réunion : transcrit le micro et ce que vous entendez "
+        "(haut-parleurs ou casque). Fichier markdown sur le bureau. "
+        "Pas de presse-papiers."
+    ),
+    "playback_tip": (
+        "Lecture : transcrit seulement ce que vous entendez — YouTube, une vidéo, "
+        "une autre appli. Pas le micro, pas l’image. Fichier sur le bureau."
+    ),
+    "record_menu_tip": "Réunion (micro + haut-parleurs) ou Lecture (haut-parleurs seulement).",
+    "clips_tip": "Historique du presse-papiers. Ouvrez un extrait pour le recopier.",
+    "records_tip": "Transcriptions réunion et lecture enregistrées sur le bureau.",
+    "records_empty": "Aucune note pour l’instant. Utilisez Enregistrer.",
+    "records_empty_preview": "Aucune phrase dans ce fichier.",
+    "records_open_tip": "Ouvrir la transcription complète.",
+    "close_tip": "Fermer cette fenêtre.",
+    "back": "Retour",
+    "back_tip": "Retour à la liste des notes.",
+    "open_file": "Ouvrir le fichier",
+    "open_file_tip": "Ouvre ce fichier markdown dans l’appli par défaut.",
+    "kind_meeting": "Réunion",
+    "kind_playback": "Lecture",
+    "settings_tip": "Langue, opacité, Whisper, correcteur, micro au silence, suggestions.",
+    "language_tip": "Langue de l’interface. La reconnaissance reste automatique.",
+    "whisper_tip": "Modèle Faster-Whisper sur ce PC. Le changer recharge le GPU.",
+    "corrector_tip": "Modèle Ollama local qui corrige les phrases terminées.",
+    "voice_tip": (
+        "Dictée parlée, distincte de la saisie. Terminez par un point pour "
+        "corriger et copier. Toujours lisible pour une personne."
+    ),
+    "voice_role": "Dictée",
+    "voice_phrase_tip": "Dernière phrase dictée. Copier la remet dans le presse-papiers.",
+    "hearing_tip": "Ce que Whisper entend maintenant. Hypothèse partielle, pas la phrase sauvée.",
+    "type_tip": (
+        "Texte saisi, distinct de la voix. Entrée ou un point corrige et copie. "
+        "Les icônes à côté de Saisie choisissent la correction humaine ou IA. "
+        "Tab accepte la suggestion."
+    ),
+    "type_phrase_tip": "Dernière phrase saisie après correction. Copier la remet dans le presse-papiers.",
+    "correct_human_tip": (
+        "Humain : corrige grammaire et ponctuation. Garde vos mots et votre ton. Pour les gens."
+    ),
+    "correct_ai_tip": (
+        "IA : reformule entièrement en consigne pour un autre modèle. Ne répond pas à la demande."
+    ),
+    "phrase_tip": "Dernière phrase terminée. Copier la remet dans le presse-papiers.",
+    "status_tip": "État de la capture. Vert = actif, gris = pause, rouge = off.",
+    "brand_tip": "Glissez pour déplacer la fenêtre.",
+    "copy_meet_tip": "L’enregistrement va dans un fichier, pas le presse-papiers.",
 }
 
 _ES = {
@@ -180,66 +289,64 @@ _ES = {
     "flash_loading": "Cargando",
     "flash_error": "Error",
     "live": "En vivo",
-}
-
-_DE = {
-    **_EN,
-    "mic": "Mikro",
-    "copy": "Kopieren",
-    "history": "Verlauf",
-    "hide": "Ausblenden",
-    "app_title": "Zwischenablage",
-    "voice": "Sprache",
-    "hearing": "Hört",
-    "type": "Tippen",
-    "meeting": "Meeting",
-    "record": "Aufnehmen",
-    "stop_save": "Stopp & speichern",
-    "settings": "Einstellungen",
-    "language": "Sprache",
-    "opacity": "Deckkraft",
-    "opacity_tip": "Wie deckend das Fenster ist. 100 % ist undurchsichtig.",
-    "corrector": "Korrektur",
-    "vad": "Mikrofon bei Stille aus",
-    "predict": "Beim Tippen vorschlagen",
-    "empty": "Bereit zum Einfügen",
-    "type_hint": "Tippen, Tab zum Übernehmen, dann Enter oder Punkt.",
-    "meet_hint": "Transkript erscheint hier.",
+    "clips": "Clips",
+    "records": "Notas",
+    "record_meeting": "Reunión",
+    "record_playback": "Reproducción",
+    "stop_save": "Parar",
+    "meet_hint": "Las frases corregidas aparecen aquí.",
     "meet_tip": (
-        "Transkribiert den Raum (Mikrofon und Lautsprecher oder Kopfhörer) "
-        "und speichert Notizen auf dem Desktop. Nicht in die Zwischenablage."
+        "Reunión: transcribe el micrófono y lo que oye "
+        "(altavoces o auriculares). Archivo markdown en el escritorio. "
+        "No usa el portapapeles."
     ),
-    "mic_tip": "Aus stoppt das Mikrofon.",
-    "history_tip": "Zeigt den Verlauf. Kopieren Sie jeden Eintrag.",
-    "history_empty": "Noch kein Verlauf.",
-    "history_copy_tip": "Kopiert diesen Text in die Zwischenablage.",
-    "close": "Schließen",
-    "copy_tip": "Letzten Satz erneut kopieren",
-    "copy_meet_tip": "Sprache geht in die Notizen, nicht in die Zwischenablage.",
-    "hide_tip": "Blendet das Fenster aus. Klick auf das Tray-Symbol zum Anzeigen.",
-    "vad_tip": "Nach Stille: Mikrofon und Whisper aus. Sprache weckt sie.",
-    "predict_tip": "Grauer Vorschlag in Tippen, solange das Feld aktiv ist. Tab fügt ein.",
-    "clear": "Leeren",
-    "clear_tip": "Leert das Tippen-Feld.",
-    "retry_tip": "Andere Formulierung für diesen Satz.",
-    "status_off": "Mikro aus",
-    "status_loading": "Laden",
-    "status_listening": "Hört zu",
-    "status_uncertain": "Andere Stimme",
-    "status_locked": "Ihre Stimme",
-    "status_recording": "Aufnahme",
-    "status_error": "Fehler",
-    "status_quiet": "Stille",
-    "flash_copied": "Kopiert",
-    "flash_saved": "Gespeichert",
-    "flash_correcting": "Korrigiert",
-    "flash_empty": "Leer",
-    "flash_loading": "Laden",
-    "flash_error": "Fehler",
-    "live": "Live",
+    "playback_tip": (
+        "Reproducción: transcribe solo lo que oye — YouTube, un vídeo u otra app. "
+        "Sin micrófono y sin imagen. Archivo en el escritorio."
+    ),
+    "record_menu_tip": "Reunión (mic + altavoces) o Reproducción (solo altavoces).",
+    "clips_tip": "Historial del portapapeles. Abra un clip para copiarlo de nuevo.",
+    "records_tip": "Transcripciones de reunión y reproducción en el escritorio.",
+    "records_empty": "Aún no hay notas. Use Grabar para guardar una.",
+    "records_empty_preview": "No hay frases en este archivo.",
+    "records_open_tip": "Abrir la transcripción completa.",
+    "close_tip": "Cerrar esta ventana.",
+    "back": "Atrás",
+    "back_tip": "Volver a la lista de notas.",
+    "open_file": "Abrir archivo",
+    "open_file_tip": "Abre este markdown con la aplicación predeterminada.",
+    "kind_meeting": "Reunión",
+    "kind_playback": "Reproducción",
+    "settings_tip": "Idioma, opacidad, Whisper, corrector, micrófono en silencio y sugerencias.",
+    "language_tip": "Idioma de la interfaz. El reconocimiento sigue siendo automático.",
+    "whisper_tip": "Modelo Faster-Whisper en este PC. Cambiarlo recarga CUDA.",
+    "corrector_tip": "Modelo Ollama local que corrige las frases terminadas.",
+    "voice_tip": (
+        "Dictado hablado, aparte de Escribir. Termine con un punto para "
+        "corregir y copiar. Siempre legible para una persona."
+    ),
+    "voice_role": "Dictado",
+    "voice_phrase_tip": "Última frase dictada. Copiar la vuelve a poner en el portapapeles.",
+    "hearing_tip": "Lo que Whisper oye ahora. Es una hipótesis, no la frase guardada.",
+    "type_tip": (
+        "Texto escrito, aparte de Voz. Enter o un punto corrige y copia. "
+        "Los iconos junto a Escribir eligen corrección humana o IA. "
+        "Tab acepta la sugerencia."
+    ),
+    "type_phrase_tip": "Última frase escrita tras la corrección. Copiar la vuelve a poner en el portapapeles.",
+    "correct_human_tip": (
+        "Humano: corrige gramática y puntuación. Conserva tus palabras y tu tono. Para personas."
+    ),
+    "correct_ai_tip": (
+        "IA: reformula por completo como indicación para otro modelo. No responde a la petición."
+    ),
+    "phrase_tip": "Última frase terminada. Copiar la vuelve a poner en el portapapeles.",
+    "status_tip": "Estado de captura. Verde = activo, gris = inactivo, rojo = off.",
+    "brand_tip": "Arrastre para mover esta ventana.",
+    "copy_meet_tip": "La grabación va a un archivo, no al portapapeles.",
 }
 
-STRINGS = {"en": _EN, "fr": _FR, "es": _ES, "de": _DE}
+STRINGS = {"en": _EN, "fr": _FR, "es": _ES}
 
 
 def t(lang: str, key: str) -> str:

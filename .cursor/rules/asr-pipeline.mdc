@@ -14,5 +14,5 @@ Whisper is not a native streaming model. Low latency = short overlapping windows
 - `beam_size=1` on partials. Partials → overlay only. Whole-phrase voice commands (`paste last`, `copy last`, `correct last`) skip Ollama.
 - Enable OFF must stop the stream, stop the VAD probe, and idle the ASR worker.
 - Voice gate (RMS + spectral centroid) skips ASR on other speakers.
-- VAD: after `vad_silence_ms` of quiet, stop the streaming mic and idle CUDA. A short blocking probe wakes capture on speech. Meeting Record keeps the stream open and mixes WASAPI speaker loopback with the microphone.
+- VAD: after `vad_silence_ms` of quiet, stop the streaming mic and idle CUDA. A short blocking probe wakes capture on speech. Meeting Record keeps the stream open and mixes WASAPI speaker loopback with the microphone. Playback Record uses loopback only. Stitch overlapping windows; do not write sliding fragments to notes.
 - Also gate on `no_speech_prob` and avg logprob. Do not overwrite clipboard on reject. No pyannote on the hot path.

@@ -11,6 +11,7 @@ Local, always-on Windows desktop app: microphone → CUDA Faster-Whisper → loc
 - `Ctrl+Shift+A` reformats whatever is already on the clipboard (works with capture OFF).
 - `Ctrl+Shift+R` focuses the Type field; press again to return to the last text field in another app (including Explorer).
 - Meeting Record writes a desktop markdown file and does **not** copy to the clipboard.
+- Playback Record transcribes speakers/headphones only (YouTube and other app audio). Same desktop notes, no clipboard.
 - All audio, transcripts, and LLM traffic stay on this machine.
 
 ## Capture semantics
@@ -25,10 +26,12 @@ WASAPI / sounddevice mic → callback → lock-free ring buffer
   → overlay partials
   → committed sentence → Ollama 127.0.0.1 → clipboard
 Type field (focused) → Ollama continuation → Tab accepts
+Type correction radios (human | AI) apply to Type and Ctrl+Shift+A only
 Quiet (VAD) → stop stream + idle ASR; probe bursts wake capture
-Ctrl+Shift+A → Ollama (dictation prompt) → clipboard
+Ctrl+Shift+A → Ollama (human or AI prompt from Type radios) → clipboard
 Ctrl+Shift+R → Type field; again → last other-app text field
 Meeting Record → mic ring + WASAPI speaker loopback → mix → same ASR → desktop markdown (no clipboard)
+Playback Record → WASAPI speaker loopback only → same ASR → desktop markdown (no clipboard)
 ```
 
 - Audio callback: copy samples only. No locks, no GPU, no Qt.
@@ -52,10 +55,11 @@ Latency targets: overlay partials **< ~400 ms**; clipboard commit **< ~1 s** aft
 
 | Mode | Trigger | Output |
 |---|---|---|
-| Dictation | Mic ON, sentence ending in `.` `?` `!` | Corrected prose → clipboard |
-| Type | Enter or `.` `?` `!` in the Type field | Same as dictation. Tab accepts a grey suggestion while that field is focused. `Ctrl+Shift+R` focuses Type; again returns to the other app. |
-| Reformat | `Ctrl+Shift+A` or say correct last | Rewrite of current clipboard |
-| Meeting | Record | Transcript of microphone + speaker/headphone output → `Desktop/Meeting YYYY-MM-DD HHMM.md` |
+| Dictation | Mic ON, sentence ending in `.` `?` `!` | Human-readable correction → clipboard |
+| Type | Enter or `.` `?` `!` in the Type field | Human fix or AI reformulation, from the icon radios on the Type row. Tab accepts a grey suggestion while that field is focused. `Ctrl+Shift+R` focuses Type; again returns to the other app. |
+| Reformat | `Ctrl+Shift+A` or say correct last | Rewrite of current clipboard using the Type radios (human or AI) |
+| Meeting | Record → Meeting | Transcript of microphone + speaker/headphone output → `Desktop/Meeting YYYY-MM-DD HHMM.md` |
+| Playback | Record → Playback | Transcript of speaker/headphone output only (YouTube, videos, other apps) → `Desktop/Playback YYYY-MM-DD HHMM.md` |
 
 ## Package layout
 

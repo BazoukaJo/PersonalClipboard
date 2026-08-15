@@ -29,7 +29,8 @@ Single local user on this PC.
 |---|---|---|
 | Ambient dictation | Enable ON; sentence committed | Corrected prose → clipboard |
 | Clipboard reformat | `Ctrl+Shift+A` | Rewrite of current clipboard (capture may be OFF) |
-| Meeting notes | Record in the overlay | Transcript → desktop markdown; no clipboard |
+| Meeting notes | Record → Meeting | Transcript → desktop markdown; no clipboard |
+| Playback notes | Record → Playback | Speakers/headphones only → desktop markdown; no clipboard |
 
 ## 4. Functional requirements
 
@@ -56,6 +57,7 @@ Single local user on this PC.
 - FR-L5: `Ctrl+Shift+A` is a **global** hotkey (`pynput`); Qt shortcuts are insufficient.
 - FR-L6: While the Type field is focused (and Meeting Record is off), the same localhost model may suggest a short continuation as grey ghost text. Tab inserts it. ASR partials never use this path.
 - FR-L7: `Ctrl+Shift+R` is a **global** hotkey. It focuses Type. If Type is already focused, restore the last text field in another app or Explorer.
+- FR-L8: Type has two icon-only correction radios on the Type title row: **human** (fix grammar, keep wording) and **AI** (fully reformulate as a prompt). Voice dictation and meeting/playback notes always use human correction and are not switched by those radios.
 
 ### 4.4 Overlay
 
@@ -63,7 +65,7 @@ Single local user on this PC.
 - FR-U2: Shows partial hypothesis, last commit, and status `listening | quiet | uncertain | locked | off`.
 - FR-U3: Enable switch is visible and reachable without focusing another app.
 - FR-U4: Only one process. A new launch (desktop shortcut to the exe, tray Restart, or `pythonw -m`) stops the previous instance, then starts fresh.
-- FR-U5: HUD Settings: UI language, overlay opacity, Whisper model, Ollama model, VAD idle toggle, type-ahead toggle, overlay position and size. Persist under LOCALAPPDATA. Mic enable is not persisted.
+- FR-U5: HUD Settings: UI language (English, Français, Español), overlay opacity, Whisper model, Ollama model, VAD idle toggle, type-ahead toggle, overlay position and size. Persist under LOCALAPPDATA. Mic enable is not persisted.
 
 ### 4.5 Cacophony
 
@@ -73,9 +75,12 @@ Single local user on this PC.
 
 ### 4.6 Meeting notes
 
-- FR-M1: Record transcribes the room to `Desktop/Meeting YYYY-MM-DD HHMM.md`.
+- FR-M1: Record → Meeting transcribes the room to `Desktop/Meeting YYYY-MM-DD HHMM.md`.
 - FR-M2: While recording, spoken commits do not write the clipboard. Copy is disabled.
 - FR-M3: Do not write WAV. Meeting Record mixes the microphone with WASAPI loopback of speaker/headphone output. Dictation stays microphone-only.
+- FR-M4: Record → Playback transcribes speaker/headphone output only (YouTube, videos, other apps) to `Desktop/Playback YYYY-MM-DD HHMM.md`. It does not capture video frames. Mic may stay off.
+- FR-M5: Records opens a modal of saved meeting and playback files. Clicking a row shows the full transcript.
+- FR-M6: Only completed, corrected phrases are written. Overlapping ASR windows are stitched, not saved as separate lines.
 
 ## 5. Non-functional requirements
 

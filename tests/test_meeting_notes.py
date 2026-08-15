@@ -26,6 +26,16 @@ def test_meeting_notes_append_to_desktop_folder(tmp_path: Path) -> None:
     assert notes.preview().count("Hello") == 1
 
 
+def test_meeting_notes_skip_sliding_suffix(tmp_path: Path) -> None:
+    started = datetime(2026, 8, 14, 12, 28)
+    notes = MeetingNotes(tmp_path, started, "speakers", kind="playback")
+    notes.append("that from its shadows.", when=datetime(2026, 8, 14, 12, 29))
+    notes.append("from its shadows.", when=datetime(2026, 8, 14, 12, 29))
+    notes.append("its shadows.", when=datetime(2026, 8, 14, 12, 29))
+    text = notes.path.read_text(encoding="utf-8")
+    assert text.count("shadows") == 1
+
+
 def test_pause_commit_after_quiet_hops() -> None:
     asm = SentenceAssembler(min_chars=4)
     asm.set_pause_commit(True)
@@ -40,6 +50,17 @@ def test_pause_commit_after_quiet_hops() -> None:
     assert asm.update("", no_speech_prob=0.9, **kwargs)[1] is None
     _, commit, _ = asm.update("", no_speech_prob=0.9, **kwargs)
     assert commit == "hello world"
+
+
+def test_meeting_filename_accepts_playback_kind() -> None:
+    when = datetime(2026, 8, 14, 12, 28)
+    assert meeting_filename(when, existing=None, kind="playback") == "Playback 2026-08-14 1228.md"
+    assert (
+        meeting_filename(
+            when, existing=["Playback 2026-08-14 1228.md"], kind="playback"
+        )
+        == "Playback 2026-08-14 1228 2.md"
+    )
 
 
 def test_dictation_pause_still_does_not_commit() -> None:

@@ -41,6 +41,21 @@ def test_correct_keeps_model_loaded(monkeypatch) -> None:
     assert seen[0]["body"]["options"]["temperature"] == 0.1
 
 
+def test_correct_ai_mode_uses_reformulate_prompt(monkeypatch) -> None:
+    seen: list[dict] = []
+
+    def fake_post(url: str, *, timeout: float, body: Mapping[str, Any]) -> object:
+        seen.append(dict(body))
+        return {"message": {"content": "Summarize the meeting notes."}}
+
+    monkeypatch.setattr("personalclipboard.llm.corrector._post_json", fake_post)
+    out = Corrector(Settings()).correct("sum up notes", mode="ai")
+    assert out == "Summarize the meeting notes."
+    system = seen[0]["messages"][0]["content"].lower()
+    assert "reformulat" in system
+    assert "prompt" in system
+
+
 def test_correct_retry_sends_temperature_and_seed(monkeypatch) -> None:
     seen: list[dict] = []
 

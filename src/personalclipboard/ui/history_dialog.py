@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from personalclipboard.ui.i18n import t
+from personalclipboard.ui.i18n import LANG_CODES, t
 from personalclipboard.ui.theme import control_chrome, pointing
 
 
@@ -29,8 +29,8 @@ class HistoryDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._lang = lang if lang in ("en", "fr", "es", "de") else "en"
-        self.setWindowTitle(t(self._lang, "history"))
+        self._lang = lang if lang in LANG_CODES else "en"
+        self.setWindowTitle(t(self._lang, "clips"))
         self.setModal(True)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
@@ -44,10 +44,12 @@ class HistoryDialog(QDialog):
         root.addWidget(self._make_body(entries), 1)
 
     def _make_header(self) -> QHBoxLayout:
-        title = QLabel(t(self._lang, "history"))
+        title = QLabel(t(self._lang, "clips"))
         title.setObjectName("brand")
+        title.setToolTip(t(self._lang, "clips_tip"))
         close_btn = QPushButton(t(self._lang, "close"))
-        close_btn.setObjectName("quiet")
+        close_btn.setObjectName("ghost")
+        close_btn.setToolTip(t(self._lang, "close_tip"))
         pointing(close_btn)
         close_btn.clicked.connect(self.accept)
         row = QHBoxLayout()

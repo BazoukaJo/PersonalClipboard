@@ -69,3 +69,41 @@ def test_submit_passes_retry_options() -> None:
     assert fake.kwargs["temperature"] == 0.55
     assert fake.kwargs["seed"] == 1717
     assert fake.kwargs["vary"] is True
+    assert fake.kwargs["mode"] == "human"
+
+
+def test_submit_passes_ai_mode() -> None:
+    class Recording:
+        def __init__(self) -> None:
+            self.mode = ""
+
+        def correct(self, text: str, **kwargs: object) -> str:
+            self.mode = str(kwargs.get("mode", ""))
+            return text
+
+        def complete(self, prefix: str) -> str:
+            return ""
+
+    fake = Recording()
+    got: list[str] = []
+    worker = LlmWorker(fake, lambda _jid, text: got.append(text))
+    worker.submit("Write a summary.", mode="ai")
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline and not got:
+        time.sleep(0.02)
+    worker.shutdown()
+    assert got == ["Write a summary."]
+    assert fake.mode == "ai"
+
+
+def test_record_jobs_are_not_dropped() -> None:
+    got: list[str] = []
+    fake = _FakeCorrector()
+    worker = LlmWorker(fake, lambda *_args: None, on_record=got.append)
+    worker.submit_record("First sentence.")
+    worker.submit_record("Second sentence.")
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline and len(got) < 2:
+        time.sleep(0.02)
+    worker.shutdown()
+    assert got == ["First sentence.", "Second sentence."]

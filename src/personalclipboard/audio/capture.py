@@ -142,8 +142,7 @@ class AudioCapture:
             raise OSError(f"No usable microphone ({detail})") from sd_error
 
     def stop(self) -> None:
-        """Stop the stream so the callback no longer runs (privacy kill switch)."""
-        self.stop_loopback()
+        """Stop the microphone stream. Record loopback is stopped separately."""
         stream = self._stream
         self._stream = None
         if stream is not None:
@@ -169,6 +168,7 @@ class AudioCapture:
         self.backend = ""
 
     def close(self) -> None:
+        self.stop_loopback()
         self.stop()
         if self._pa is not None:
             self._pa.terminate()

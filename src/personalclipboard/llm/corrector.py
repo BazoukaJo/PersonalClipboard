@@ -50,6 +50,7 @@ class Corrector:
         temperature: float = 0.1,
         seed: int | None = None,
         vary: bool = False,
+        mode: str = "human",
     ) -> str:
         """Rewrite `text`. Fail-open to the original if Ollama is down."""
         stripped = text.strip()
@@ -64,6 +65,7 @@ class Corrector:
         }
         if seed is not None:
             options["seed"] = int(seed)
+        kind = "ai" if mode == "ai" else "human"
         try:
             payload = _post_json(
                 self._chat_url,
@@ -73,7 +75,7 @@ class Corrector:
                     "stream": False,
                     "keep_alive": self._keep_alive_s(),
                     "messages": [
-                        {"role": "system", "content": system_prompt()},
+                        {"role": "system", "content": system_prompt(kind)},
                         {"role": "user", "content": user},
                     ],
                     "options": options,

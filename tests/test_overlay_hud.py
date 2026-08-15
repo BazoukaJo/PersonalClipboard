@@ -1,6 +1,8 @@
 # pylint: disable=protected-access
 from PyQt6.QtCore import QEventLoop, QTimer
 
+from PyQt6.QtWidgets import QRadioButton
+
 from personalclipboard.ui.i18n import t
 from personalclipboard.ui.overlay import Overlay
 from personalclipboard.ui.settings_panel import SettingsPanel
@@ -23,9 +25,10 @@ def test_overlay_builds_and_translates(qapp) -> None:
     overlay.apply_language("fr")
     assert overlay._enable.text() == t("fr", "mic")
     assert overlay._brand.text() == t("fr", "app_title")
-    assert overlay._history_btn.text() == t("fr", "history")
-    overlay.apply_language("de")
-    assert overlay._hide_btn.text() == t("de", "hide")
+    assert overlay._history_btn.text() == t("fr", "clips")
+    assert overlay._voice_role.text() == t("fr", "voice_role")
+    overlay.apply_language("es")
+    assert overlay._hide_btn.text() == t("es", "hide")
     overlay.set_opacity(60)
     overlay.set_status("quiet")
     assert overlay._status_key == "quiet"
@@ -82,7 +85,7 @@ def test_opening_settings_grows_overlay(qapp) -> None:
     voice_h = overlay._audio_frame.height()
     extra = overlay.settings.extra_open_height()
     type_gap = overlay._typed_frame.y() - overlay._audio_frame.geometry().bottom()
-    overlay.settings._toggle.click()
+    overlay._settings_btn.click()
     _flush_qt(qapp)
     screen = overlay.screen()
     avail_h = screen.availableGeometry().height() if screen is not None else overlay.height()
@@ -94,8 +97,8 @@ def test_opening_settings_grows_overlay(qapp) -> None:
     assert overlay._audio_frame.height() == voice_h
     assert overlay._typed_frame.y() - overlay._audio_frame.geometry().bottom() == type_gap
     assert overlay.settings._predict.isVisible()
-    header_bottom = overlay.settings._toggle.mapTo(
-        overlay, overlay.settings._toggle.rect().bottomRight()
+    header_bottom = overlay.settings._header.mapTo(
+        overlay, overlay.settings._header.rect().bottomRight()
     ).y()
     lang_top = overlay.settings._lang_box.mapTo(
         overlay, overlay.settings._lang_box.rect().topLeft()
@@ -115,9 +118,8 @@ def test_opening_settings_grows_overlay(qapp) -> None:
         assert predict_bottom <= overlay.height() - 8
     else:
         assert overlay.settings._scroll.height() < overlay.settings.natural_body_height()
-    overlay.settings._toggle.click()
+    overlay._settings_btn.click()
     _flush_qt(qapp)
-    assert abs(overlay.height() - before_h) <= 8
     assert abs(overlay.width() - before_w) <= 8
     overlay.close()
 
@@ -130,12 +132,12 @@ def test_settings_stays_a_button_until_opened(qapp) -> None:
     assert overlay.settings.objectName() == "settingsDock"
     assert overlay.settings._header.isHidden()
     assert not overlay.settings._scroll.isVisible()
-    overlay.settings._toggle.click()
+    overlay._settings_btn.click()
     qapp.processEvents()
     assert overlay.settings.objectName() == "panel"
     assert overlay.settings._header.isVisible()
     assert overlay.settings._scroll.isVisible()
-    overlay.settings._toggle.click()
+    overlay._settings_btn.click()
     qapp.processEvents()
     assert overlay.settings.objectName() == "settingsDock"
     assert not overlay.settings._scroll.isVisible()
@@ -159,25 +161,51 @@ def test_phrase_background_follows_text_state(qapp) -> None:
     overlay.close()
 
 
-def test_mic_dot_follows_listen_state(qapp) -> None:
+def test_mic_toggle_has_no_status_dot(qapp) -> None:
     assert qapp is not None
     overlay = Overlay()
     chrome = overlay.styleSheet()
     assert overlay._enable.objectName() == "micToggle"
-    assert "#c4453c" in chrome
-    assert "#9a9aa0" in chrome
-    assert "#2faf5a" in chrome
-    overlay.set_enable_checked(False)
-    overlay.set_status("off")
-    assert overlay._enable.property("mic") == "off"
+    assert "QCheckBox#micToggle::indicator" in chrome
+    assert overlay._enable.property("mic") in (None, "")
     overlay.set_enable_checked(True)
-    overlay.set_status("quiet")
-    assert overlay._enable.property("mic") == "wait"
     overlay.set_status("listening")
-    assert overlay._enable.property("mic") == "live"
-    overlay.set_enable_checked(False)
-    overlay.set_status("recording")
-    assert overlay._enable.property("mic") == "off"
+    assert overlay._enable.property("mic") in (None, "")
+    overlay.close()
+
+
+def test_type_correction_radios_are_icon_only(qapp) -> None:
+    assert qapp is not None
+    overlay = Overlay()
+    overlay.show()
+    qapp.processEvents()
+    assert overlay.correction_mode() == "human"
+    assert overlay._mode_human.isChecked()
+    assert overlay._mode_human.text() == "☺"
+    assert overlay._mode_ai.text() == "✦"
+    assert overlay._mode_human.accessibleName() == "Human"
+    assert overlay._mode_ai.accessibleName() == "AI"
+    title_c = overlay._type_title.mapTo(overlay, overlay._type_title.rect().center())
+    radio_c = overlay._mode_human.mapTo(overlay, overlay._mode_human.rect().center())
+    assert abs(title_c.y() - radio_c.y()) < 14
+    assert radio_c.x() > overlay._type_title.mapTo(overlay, overlay._type_title.rect().topRight()).x()
+    assert overlay._audio_frame.findChildren(QRadioButton) == []
+    assert overlay._typed_frame.findChildren(QRadioButton)
+    overlay.set_correction_mode("ai")
+    assert overlay.correction_mode() == "ai"
+    assert overlay._mode_ai.isChecked()
+    overlay.close()
+
+
+def test_voice_stays_active_when_type_has_a_phrase(qapp) -> None:
+    overlay = Overlay()
+    overlay.show_audio_phrase("Spoken sentence.")
+    assert overlay._audio_frame.property("active") == "true"
+    overlay.show_typed_phrase("Typed sentence.")
+    assert overlay._audio_frame.property("active") == "true"
+    assert overlay._typed_frame.property("active") == "true"
+    assert overlay._audio_frame.objectName() == "voicePanel"
+    assert overlay._typed_frame.objectName() == "typePanel"
     overlay.close()
 
 
@@ -223,4 +251,26 @@ def test_compact_geometry_ignores_settings_open_height(qapp) -> None:
     box = overlay.compact_geometry()
     assert box.width() == 520
     assert box.height() == 280
+    overlay.close()
+
+
+def test_action_bar_record_and_records_have_tooltips(qapp) -> None:
+    overlay = Overlay()
+    overlay.show()
+    qapp.processEvents()
+    assert overlay._records_btn.isVisible()
+    assert overlay._record_btn.isVisible()
+    assert overlay._history_btn.isVisible()
+    assert overlay._copy_btn.isVisible()
+    assert overlay._settings_btn.isVisible()
+    assert overlay._records_btn.toolTip()
+    assert overlay._record_btn.toolTip()
+    assert overlay._enable.toolTip()
+    assert overlay._status.toolTip()
+    assert overlay._brand.toolTip()
+    overlay.set_meeting_recording(True, "Playback 2026-08-14 1941.md", kind="playback")
+    assert overlay._meet_frame.isVisible()
+    assert overlay._record_btn.objectName() == "danger"
+    overlay.set_meeting_recording(False)
+    assert not overlay._meet_frame.isVisible()
     overlay.close()

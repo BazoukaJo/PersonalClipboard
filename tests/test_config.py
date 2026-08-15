@@ -31,6 +31,7 @@ def test_ollama_is_localhost() -> None:
     assert s.type_hotkey == "<ctrl>+<shift>+r"
     assert s.vad_enabled is True
     assert s.predict_enabled is True
+    assert s.correction_mode == "human"
     assert s.ollama_keep_alive_s == 120
     assert 60 <= s.overlay_opacity <= 100
     assert s.overlay_opacity == 80
@@ -41,7 +42,7 @@ def test_load_settings_recovers_from_bad_values(tmp_path: Path) -> None:
     path.write_text(
         '{"overlay_opacity": "nope", "ui_language": "xx",'
         ' "vad_silence_ms": 99999, "whisper_model": "",'
-        ' "ollama_keep_alive_s": 5}',
+        ' "ollama_keep_alive_s": 5, "correction_mode": "robot"}',
         encoding="utf-8",
     )
     loaded = load_settings(path)
@@ -50,6 +51,7 @@ def test_load_settings_recovers_from_bad_values(tmp_path: Path) -> None:
     assert loaded.vad_silence_ms == 8000
     assert loaded.whisper_model == "large-v3-turbo"
     assert loaded.ollama_keep_alive_s == 120
+    assert loaded.correction_mode == "human"
     assert loaded.overlay_w == 0
     assert saved_overlay_rect(loaded) is None
 
@@ -75,6 +77,7 @@ def test_overlay_geometry_roundtrip(tmp_path: Path) -> None:
     settings.ollama_model = "llama3.2:1b"
     settings.vad_enabled = False
     settings.predict_enabled = False
+    settings.correction_mode = "ai"
     settings.overlay_x = -80
     settings.overlay_y = 40
     settings.overlay_w = 640
@@ -90,12 +93,21 @@ def test_overlay_geometry_roundtrip(tmp_path: Path) -> None:
     assert loaded.ollama_model == "llama3.2:1b"
     assert loaded.vad_enabled is False
     assert loaded.predict_enabled is False
+    assert loaded.correction_mode == "ai"
     assert loaded.overlay_x == -80
     assert loaded.overlay_y == 40
     assert loaded.overlay_w == 640
     assert loaded.overlay_h == 360
     assert loaded.enable_capture is False
     assert saved_overlay_rect(loaded) == (-80, 40, 640, 360)
+
+
+def test_load_settings_drops_removed_ui_languages(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text('{"ui_language": "de"}', encoding="utf-8")
+    assert load_settings(path).ui_language == "en"
+    path.write_text('{"ui_language": "nl"}', encoding="utf-8")
+    assert load_settings(path).ui_language == "en"
 
 
 def test_saved_overlay_rect_ignores_tiny_size() -> None:

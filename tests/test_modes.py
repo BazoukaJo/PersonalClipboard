@@ -9,6 +9,8 @@ def test_human_prompt_keeps_wording() -> None:
     assert text == AMBIENT_SYSTEM_PROMPT.lower()
     assert "grammar" in text
     assert "wording" in text
+    assert "do not translate" in text
+    assert "chinese" in text
     assert "reformulat" not in text
 
 

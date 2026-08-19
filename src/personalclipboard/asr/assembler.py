@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
+
 from personalclipboard.asr.commands import match_command
 
 _END = (".", "?", "!", "。", "？", "！")
-_STRIP = ".,?!:;\"'`“”‘’。？！"
+_STRIP = ".,?!:;\"'`“”‘’。？！，、；："
 _REVISION_RUN = 2
+_SIMILAR_REVISION = 0.62
+_LINE_NEAR = 0.9
 
 
 class SentenceAssembler:
@@ -73,9 +77,9 @@ class SentenceAssembler:
         follow = self._pause_commit
         sentence, rest = split_completed(self._acc, self._min_chars, require_follow=follow)
         if sentence is not None:
-            self._remember(sentence)
+            emitted = self._remember(sentence)
             self._acc = rest
-            return rest, sentence, "listening"
+            return rest, emitted, "listening"
 
         return self._acc, None, "listening"
 
@@ -86,15 +90,23 @@ class SentenceAssembler:
         text = self._acc.strip()
         if _alnum_count(text) < self._min_chars:
             return self._acc, None, "listening"
-        self._remember(text)
+        emitted = self._remember(text)
         self._acc = ""
         self._quiet_hops = 0
-        return "", text, "listening"
+        return "", emitted, "listening"
 
-    def _remember(self, sentence: str) -> None:
+    def _remember(self, sentence: str) -> str | None:
+        if self._committed:
+            action = record_line_action(sentence, self._committed[-1])
+            if action == "skip":
+                return None
+            if action == "replace":
+                self._committed[-1] = sentence
+                return sentence
         self._committed.append(sentence)
-        if len(self._committed) > 8:
-            self._committed = self._committed[-8:]
+        if len(self._committed) > 16:
+            self._committed = self._committed[-16:]
+        return sentence
 
 
 def stitch(prev: str, new: str, *, allow_concat: bool = True) -> str:
@@ -117,14 +129,16 @@ def stitch(prev: str, new: str, *, allow_concat: bool = True) -> str:
         return prev
     overlap = _prefix_suffix_overlap(prev_k, new_k)
     if overlap:
-        kept = [word for word, _key in prev_w[:-overlap]] + [word for word, _key in new_w]
-        return " ".join(kept)
+        kept = prev_w[:-overlap] + new_w
+        return _join_keyed(kept)
     if _longest_run(prev_k, new_k) >= _REVISION_RUN:
         return new if len(new_k) > len(prev_k) else prev
-    if not allow_concat:
-        return prev if len(prev_k) >= len(new_k) else new
-    kept = [word for word, _key in prev_w] + [word for word, _key in new_w]
-    return " ".join(kept)
+    if SequenceMatcher(None, _fold(prev), _fold(new)).ratio() >= _SIMILAR_REVISION:
+        return new if len(new_k) >= len(prev_k) else prev
+    if not allow_concat and len(new_k) < 4 and len(prev_k) >= len(new_k):
+        return prev
+    kept = prev_w + new_w
+    return _join_keyed(kept)
 
 
 def strip_committed(text: str, committed: list[str]) -> str:
@@ -132,7 +146,33 @@ def strip_committed(text: str, committed: list[str]) -> str:
     for item in committed:
         remaining = _excise_words(remaining, item)
     remaining = _strip_commit_suffix(remaining, committed)
-    return " ".join(remaining.split())
+    return _join_keyed(_keyed_words(remaining))
+
+
+def record_line_action(new: str, previous: str) -> str:
+    """How a new record phrase relates to the last written line: skip, replace, or append."""
+    if not previous.strip():
+        return "append"
+    new_k = [key for _word, key in _keyed_words(new)]
+    prev_k = [key for _word, key in _keyed_words(previous)]
+    if not new_k:
+        return "skip"
+    if not prev_k:
+        return "append"
+    if new_k == prev_k:
+        return "skip"
+    if _contains(new_k, prev_k):
+        return "skip"
+    if _contains(prev_k, new_k):
+        return "replace"
+    if SequenceMatcher(None, _fold(previous), _fold(new)).ratio() >= _LINE_NEAR:
+        return "replace" if len(new_k) > len(prev_k) else "skip"
+    shorter = min(len(new_k), len(prev_k))
+    union = len(set(new_k) | set(prev_k))
+    shared = len(set(new_k) & set(prev_k))
+    if shorter >= 6 and union and shared / union >= 0.86:
+        return "replace" if len(new_k) > len(prev_k) else "skip"
+    return "append"
 
 
 def split_completed(
@@ -152,15 +192,84 @@ def split_completed(
 
 def _keyed_words(text: str) -> list[tuple[str, str]]:
     items: list[tuple[str, str]] = []
-    for word in text.split():
+    for chunk in text.split():
+        items.extend(_expand_chunk(chunk))
+    return items
+
+
+def _expand_chunk(chunk: str) -> list[tuple[str, str]]:
+    if not any(_is_cjk_letter(char) for char in chunk):
+        key = _word_key(chunk)
+        return [(chunk, key)] if key else []
+    items: list[tuple[str, str]] = []
+    buf: list[str] = []
+
+    def flush_latin() -> None:
+        if not buf:
+            return
+        word = "".join(buf)
+        buf.clear()
         key = _word_key(word)
         if key:
             items.append((word, key))
+
+    for char in chunk:
+        if _is_cjk_letter(char):
+            flush_latin()
+            items.append((char, char))
+            continue
+        if items and not buf:
+            word, key = items[-1]
+            items[-1] = (word + char, key)
+            continue
+        buf.append(char)
+    flush_latin()
     return items
 
 
 def _word_key(word: str) -> str:
     return word.lower().strip(_STRIP)
+
+
+def _is_cjk_letter(char: str) -> bool:
+    code = ord(char)
+    return (
+        0x3040 <= code <= 0x30FF
+        or 0x3400 <= code <= 0x4DBF
+        or 0x4E00 <= code <= 0x9FFF
+        or 0xF900 <= code <= 0xFAFF
+        or 0xAC00 <= code <= 0xD7AF
+        or 0x20000 <= code <= 0x2FA1F
+    )
+
+
+def _join_keyed(items: list[tuple[str, str]]) -> str:
+    if not items:
+        return ""
+    parts = [items[0][0]]
+    for index in range(1, len(items)):
+        prev = items[index - 1][0]
+        current = items[index][0]
+        if _cjk_glue(prev, current):
+            parts.append(current)
+        else:
+            parts.append(" ")
+            parts.append(current)
+    return "".join(parts)
+
+
+def _cjk_glue(left: str, right: str) -> bool:
+    if _is_cjk_letter(left[-1]) and _is_cjk_letter(right[0]):
+        return True
+    if _is_cjk_letter(left[-1]) and right[0] in _STRIP:
+        return True
+    if left[-1] in _STRIP and _is_cjk_letter(right[0]):
+        return True
+    return False
+
+
+def _fold(text: str) -> str:
+    return " ".join(key for _word, key in _keyed_words(text))
 
 
 def _contains(inner: list[str], outer: list[str]) -> bool:
@@ -211,7 +320,7 @@ def _excise_words(text: str, chunk: str) -> str:
         keys = [key for _word, key in hay[index : index + count]]
         if keys == needle:
             kept = hay[:index] + hay[index + count :]
-            return " ".join(word for word, _key in kept)
+            return _join_keyed(kept)
     return text
 
 
@@ -229,7 +338,7 @@ def _strip_commit_suffix(text: str, committed: list[str]) -> str:
             if head == needle[-count:]:
                 hay = hay[count:]
                 break
-    return " ".join(word for word, _key in hay)
+    return _join_keyed(hay)
 
 
 def _alnum_count(text: str) -> int:

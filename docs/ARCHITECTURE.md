@@ -52,6 +52,9 @@ from faster_whisper import WhisperModel
 model = WhisperModel("large-v3-turbo", device="cuda", compute_type="float16")
 segments, info = model.transcribe(
     audio_window,
+    language=None,
+    task="transcribe",
+    multilingual=True,  # EN/FR/ZH (and mixed) per segment; do not translate
     beam_size=1,
     condition_on_previous_text=False,
     vad_filter=False,  # Whisper Silero filter off; app QuietIdle owns idle/wake

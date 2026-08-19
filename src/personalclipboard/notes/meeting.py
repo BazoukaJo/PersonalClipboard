@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from personalclipboard.asr.assembler import record_line_action
+
 
 def desktop_directory() -> Path:
     """User desktop, including OneDrive-redirected Desktop/Bureau."""
@@ -72,14 +74,14 @@ class MeetingNotes:
         self._started = started
         self._lines: list[str] = []
         title = "Playback notes" if self.kind == "playback" else "Meeting notes"
-        header = (
+        self._header = (
             f"# {title}\n\n"
             f"- Kind: {self.kind}\n"
             f"- Started: {started.strftime('%A, %d %B %Y, %H:%M')}\n"
             f"- Source: {source}\n"
             f"- Local transcript only. Audio is not saved.\n\n"
         )
-        self.path.write_text(header, encoding="utf-8")
+        self.path.write_text(self._header, encoding="utf-8")
 
     @property
     def filename(self) -> str:
@@ -89,15 +91,17 @@ class MeetingNotes:
         stripped = " ".join(text.split())
         if not stripped:
             return
-        if self._is_slide_repeat(stripped):
+        previous = _line_body(self._lines[-1]) if self._lines else ""
+        action = record_line_action(stripped, previous)
+        if action == "skip":
             return
         stamp = (when or datetime.now()).strftime("%H:%M")
         line = f"- **{stamp}** {stripped}"
-        self._lines.append(line)
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
+        if action == "replace":
+            self._lines[-1] = line
+        else:
+            self._lines.append(line)
+        self._rewrite()
 
     def preview(self) -> str:
         if not self._lines:
@@ -116,11 +120,13 @@ class MeetingNotes:
         except OSError:
             return ""
 
-    def _is_slide_repeat(self, text: str) -> bool:
-        if not self._lines:
-            return False
-        previous = _line_body(self._lines[-1])
-        return _keys_are_suffix(text, previous)
+    def _rewrite(self) -> None:
+        with self.path.open("w", encoding="utf-8") as handle:
+            handle.write(self._header)
+            for line in self._lines:
+                handle.write(line + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
 
 
 def _line_body(line: str) -> str:
@@ -129,16 +135,6 @@ def _line_body(line: str) -> str:
     if index < 0:
         return line.lstrip("- ").strip()
     return line[index + len(marker) :].strip()
-
-
-def _keys_are_suffix(shorter: str, longer: str) -> bool:
-    left = [word.lower().strip(".,?!:;") for word in shorter.split() if word.strip(".,?!:;")]
-    right = [word.lower().strip(".,?!:;") for word in longer.split() if word.strip(".,?!:;")]
-    if not left or not right or len(left) > len(right):
-        return False
-    if left == right:
-        return True
-    return right[-len(left) :] == left
 
 
 def _known_folder_desktop() -> Path | None:

@@ -10,10 +10,10 @@ The HUD is a translucent always-on-top tool window. **Listening** on the header 
 
 ## Download (Windows)
 
-GitHub limits each file to 2 GiB, so v0.3.1 is two zips. Download **both** from [v0.3.1](https://github.com/BazoukaJo/PersonalClipboard/releases/tag/v0.3.1) and unzip them into the **same** folder:
+GitHub limits each file to 2 GiB, so v0.3.2 is two zips. Download **both** from [v0.3.2](https://github.com/BazoukaJo/PersonalClipboard/releases/tag/v0.3.2) and unzip them into the **same** folder:
 
-1. `PersonalClipboard-0.3.1-windows-x64.zip` — app
-2. `PersonalClipboard-0.3.1-windows-x64-cuda12.zip` — CUDA 12 DLLs (`_internal\nvidia`)
+1. `PersonalClipboard-0.3.2-windows-x64.zip` — app
+2. `PersonalClipboard-0.3.2-windows-x64-cuda12.zip` — CUDA 12 DLLs (`_internal\nvidia`)
 
 Then run `PersonalClipboard\PersonalClipboard.exe`.
 

@@ -36,6 +36,23 @@ def test_meeting_notes_skip_sliding_suffix(tmp_path: Path) -> None:
     assert text.count("shadows") == 1
 
 
+def test_meeting_notes_replace_extended_overlap(tmp_path: Path) -> None:
+    notes = MeetingNotes(tmp_path, datetime(2026, 8, 14, 12, 28), "speakers", kind="playback")
+    notes.append("the lighting is harsh", when=datetime(2026, 8, 14, 12, 29))
+    notes.append("the lighting is harsh tonight", when=datetime(2026, 8, 14, 12, 29))
+    text = notes.path.read_text(encoding="utf-8")
+    assert text.count("lighting") == 1
+    assert "tonight" in text
+
+
+def test_meeting_notes_skip_duplicate_chinese(tmp_path: Path) -> None:
+    notes = MeetingNotes(tmp_path, datetime(2026, 8, 14, 12, 28), "mic", kind="meeting")
+    notes.append("你好世界。", when=datetime(2026, 8, 14, 12, 29))
+    notes.append("你好世界。", when=datetime(2026, 8, 14, 12, 29))
+    text = notes.path.read_text(encoding="utf-8")
+    assert text.count("你好世界") == 1
+
+
 def test_pause_commit_after_quiet_hops() -> None:
     asm = SentenceAssembler(min_chars=4)
     asm.set_pause_commit(True)

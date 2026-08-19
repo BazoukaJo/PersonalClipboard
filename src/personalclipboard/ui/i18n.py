@@ -82,7 +82,7 @@ _EN = {
     "translate": "Translate",
     "translate_tip": "Translate this sentence into the overlay language.",
     "settings_tip": "Language, opacity, Whisper model, corrector, idle-mic, and type-ahead.",
-    "language_tip": "Language of this overlay. Speech recognition still auto-detects.",
+    "language_tip": "Language of this overlay. Speech still auto-detects English, French, and Chinese.",
     "whisper_tip": "Faster-Whisper model on this PC. Changing it reloads CUDA weights.",
     "corrector_tip": "Local Ollama model that corrects finished sentences.",
     "voice_tip": (
@@ -213,7 +213,7 @@ _FR = {
     "kind_meeting": "Réunion",
     "kind_playback": "Lecture",
     "settings_tip": "Langue, opacité, Whisper, correcteur, micro au silence, suggestions.",
-    "language_tip": "Langue de l’interface. La reconnaissance reste automatique.",
+    "language_tip": "Langue de l’interface. La reconnaissance détecte l’anglais, le français et le chinois.",
     "whisper_tip": "Modèle Faster-Whisper sur ce PC. Le changer recharge le GPU.",
     "corrector_tip": "Modèle Ollama local qui corrige les phrases terminées.",
     "voice_tip": (
@@ -329,7 +329,7 @@ _ES = {
     "kind_meeting": "Reunión",
     "kind_playback": "Reproducción",
     "settings_tip": "Idioma, opacidad, Whisper, corrector, micrófono en silencio y sugerencias.",
-    "language_tip": "Idioma de la interfaz. El reconocimiento sigue siendo automático.",
+    "language_tip": "Idioma de la interfaz. El reconocimiento detecta inglés, francés y chino.",
     "whisper_tip": "Modelo Faster-Whisper en este PC. Cambiarlo recarga CUDA.",
     "corrector_tip": "Modelo Ollama local que corrige las frases terminadas.",
     "voice_tip": (

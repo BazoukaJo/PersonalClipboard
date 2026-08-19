@@ -287,10 +287,15 @@ def _transcribe(
     beam_size: int,
     condition_on_previous_text: bool,
 ) -> tuple[str, float, float]:
+    # language=None + multilingual=True: detect per segment (EN/FR/ZH code-switch).
+    # task=transcribe: never translate into English.
     # condition_on_previous_text=False: overlapping windows must not inherit prior text.
     # vad_filter=False: this process owns VAD (QuietIdle + VoiceGate).
     segments, _info = model.transcribe(
         audio,
+        language=None,
+        task="transcribe",
+        multilingual=True,
         beam_size=beam_size,
         condition_on_previous_text=condition_on_previous_text,
         vad_filter=False,

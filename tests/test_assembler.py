@@ -1,4 +1,4 @@
-from personalclipboard.asr.assembler import SentenceAssembler
+from personalclipboard.asr.assembler import SentenceAssembler, record_line_action, stitch
 
 
 def test_commit_on_punctuation() -> None:
@@ -161,3 +161,37 @@ def test_meeting_commits_when_next_sentence_starts() -> None:
     commit = _hop(asm, "lighting is harsh. Next shot is ready.")
     assert commit == "the lighting is harsh."
     assert "Next shot is ready." in (asm._acc or "")
+
+
+def test_record_keeps_english_then_french() -> None:
+    merged = stitch("hello everyone how are you", "bonjour tout le monde", allow_concat=False)
+    lower = merged.lower()
+    assert "hello" in lower
+    assert "bonjour" in lower
+
+
+def test_chinese_windows_stitch_without_spaces() -> None:
+    merged = stitch("你好世界", "世界今天很好", allow_concat=False)
+    assert "你好世界今天很好" == merged.replace(" ", "")
+
+
+def test_pause_does_not_recommit_the_same_phrase() -> None:
+    asm = SentenceAssembler(min_chars=4)
+    asm.set_pause_commit(True)
+    assert _hop(asm, "hello there everyone") is None
+    first = _hop(asm, "", quiet=True)
+    assert first is None
+    assert _hop(asm, "", quiet=True) is None
+    first = _hop(asm, "", quiet=True)
+    assert first == "hello there everyone"
+    assert _hop(asm, "hello there everyone") is None
+    assert _hop(asm, "", quiet=True) is None
+    assert _hop(asm, "", quiet=True) is None
+    assert _hop(asm, "", quiet=True) is None
+
+
+def test_record_line_action_skips_suffix_and_replaces_extension() -> None:
+    assert record_line_action("from its shadows.", "that from its shadows.") == "skip"
+    assert record_line_action("the lighting is harsh tonight", "the lighting is harsh") == "replace"
+    assert record_line_action("Let's begin.", "Hello everyone.") == "append"
+    assert record_line_action("你好世界。", "你好世界。") == "skip"

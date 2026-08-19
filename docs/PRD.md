@@ -1,6 +1,6 @@
 # PersonalClipboard — Product Requirements Document
 
-**Status:** v0.3.1 live dictation overlay (Windows).  
+**Status:** v0.3.2 live dictation overlay (Windows).  
 **Platform:** Windows 10/11  
 **Hardware target:** Intel Core i9-14900K, NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)  
 **Privacy:** fully local; no cloud services
@@ -47,6 +47,7 @@ Single local user on this PC.
 - FR-A2: Streaming via ~1.0 s windows and 200–300 ms hop; `condition_on_previous_text=False`.
 - FR-A3: Partials update the overlay only. Committed sentences may be sent to Ollama.
 - FR-A4: `beam_size=1` for partials, `beam_size=3` for commit.
+- FR-A5: Speech is transcribed, not translated. Auto-detect per segment so English, French, and Chinese (including switches in one recording) stay in the spoken language. HUD language remains English / Français / Español.
 
 ### 4.3 Correction and clipboard
 
@@ -75,7 +76,7 @@ Single local user on this PC.
 
 ### 4.6 Meeting notes
 
-- FR-M1: Record → Meeting transcribes the room to `Desktop/Meeting YYYY-MM-DD HHMM.md`.
+- FR-M1: Record → Meeting transcribes the room (English, French, Chinese, or mixed) to `Desktop/Meeting YYYY-MM-DD HHMM.md`. Overlapping hops must not write the same phrase twice.
 - FR-M2: While recording, spoken commits do not write the clipboard. Copy is disabled.
 - FR-M3: Do not write WAV. Meeting Record mixes the microphone with WASAPI loopback of speaker/headphone output. Dictation stays microphone-only.
 - FR-M4: Record → Playback transcribes speaker/headphone output only (YouTube, videos, other apps) to `Desktop/Playback YYYY-MM-DD HHMM.md`. It does not capture video frames. Mic may stay off.

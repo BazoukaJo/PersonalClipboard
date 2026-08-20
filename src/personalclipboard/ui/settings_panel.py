@@ -57,6 +57,8 @@ class SettingsPanel(QDialog):
         )
         self._lang = "en"
         self._updating = False
+        self._input_default_name = ""
+        self._output_default_name = ""
         self._make_fields()
         self._style_fields()
         self._body = QWidget()
@@ -112,10 +114,12 @@ class SettingsPanel(QDialog):
         self._input_label = QLabel()
         self._input_label.setObjectName("fieldLabel")
         self._input = QComboBox()
+        self._input.setMaxVisibleItems(24)
         self._input.currentIndexChanged.connect(self._emit_input)
         self._output_label = QLabel()
         self._output_label.setObjectName("fieldLabel")
         self._output = QComboBox()
+        self._output.setMaxVisibleItems(24)
         self._output.currentIndexChanged.connect(self._emit_output)
         self._opacity_label = QLabel()
         self._opacity_label.setObjectName("fieldLabel")
@@ -191,9 +195,9 @@ class SettingsPanel(QDialog):
         self._predict.setText(t(lang, "predict"))
         self._predict.setToolTip(t(lang, "predict_tip"))
         if self._input.count() > 0:
-            self._input.setItemText(0, t(lang, "device_default"))
+            self._input.setItemText(0, self._default_item_text(self._input_default_name))
         if self._output.count() > 0:
-            self._output.setItemText(0, t(lang, "device_default"))
+            self._output.setItemText(0, self._default_item_text(self._output_default_name))
 
     def set_values(
         self,
@@ -205,12 +209,14 @@ class SettingsPanel(QDialog):
         ollama_models: list[str],
         vad: bool,
         predict: bool,
-        input_devices: list[tuple[str, str]] | None = None,
-        output_devices: list[tuple[str, str]] | None = None,
+        input_devices: list[tuple[str, str]] | list[tuple[str, str, str]] | None = None,
+        output_devices: list[tuple[str, str]] | list[tuple[str, str, str]] | None = None,
         input_device_id: str = "",
         input_device_name: str = "",
         output_device_id: str = "",
         output_device_name: str = "",
+        default_input_name: str = "",
+        default_output_name: str = "",
     ) -> None:
         self._updating = True
         index = self._lang_box.findData(language)
@@ -221,10 +227,18 @@ class SettingsPanel(QDialog):
         models = list(dict.fromkeys(list(OLLAMA_CHOICES) + ollama_models + [ollama]))
         self._fill_combo(self._ollama, models, ollama)
         self._fill_endpoint(
-            self._input, input_devices or [], input_device_id, input_device_name
+            self._input,
+            input_devices or [],
+            input_device_id,
+            input_device_name,
+            default_input_name,
         )
         self._fill_endpoint(
-            self._output, output_devices or [], output_device_id, output_device_name
+            self._output,
+            output_devices or [],
+            output_device_id,
+            output_device_name,
+            default_output_name,
         )
         self._vad.setChecked(vad)
         self._predict.setChecked(predict)
@@ -244,25 +258,41 @@ class SettingsPanel(QDialog):
             box.setCurrentText(current)
         box.blockSignals(False)
 
+    def _default_item_text(self, current_name: str) -> str:
+        base = t(self._lang, "device_default")
+        name = current_name.strip()
+        return f"{base} ({name})" if name else base
+
     def _fill_endpoint(
         self,
         box: QComboBox,
-        devices: list[tuple[str, str]],
+        devices: list[tuple[str, str]] | list[tuple[str, str, str]],
         current_id: str,
         current_name: str,
+        default_name: str,
     ) -> None:
+        if box is self._input:
+            self._input_default_name = default_name
+        else:
+            self._output_default_name = default_name
+        canonical_role = Qt.ItemDataRole.UserRole + 1
         box.blockSignals(True)
         box.clear()
-        box.addItem(t(self._lang, "device_default"), "")
+        box.addItem(self._default_item_text(default_name), "")
+        box.setItemData(0, "", canonical_role)
         seen = {""}
-        for device_id, name in devices:
-            ident = device_id.strip()
+        for row in devices:
+            ident = str(row[0]).strip()
+            label = str(row[1]).strip()
+            canonical = str(row[2]).strip() if len(row) > 2 else label
             if not ident or ident in seen:
                 continue
             seen.add(ident)
-            box.addItem(name.strip() or ident, ident)
+            box.addItem(label or ident, ident)
+            box.setItemData(box.count() - 1, canonical or label, canonical_role)
         if current_id and current_id not in seen:
             box.addItem(current_name.strip() or current_id, current_id)
+            box.setItemData(box.count() - 1, current_name.strip() or current_id, canonical_role)
         found = box.findData(current_id)
         box.setCurrentIndex(found if found >= 0 else 0)
         box.blockSignals(False)
@@ -311,7 +341,8 @@ class SettingsPanel(QDialog):
         ident = box.currentData()
         if not isinstance(ident, str):
             ident = ""
-        name = box.currentText().strip()
+        canonical = box.currentData(Qt.ItemDataRole.UserRole + 1)
+        name = canonical.strip() if isinstance(canonical, str) else box.currentText().strip()
         if not ident:
             return "", ""
         return ident, name

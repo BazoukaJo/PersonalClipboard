@@ -16,6 +16,11 @@ COINIT_MULTITHREADED = 0
 E_RENDER = 0
 E_CONSOLE = 0
 E_COMMUNICATIONS = 2
+DEVICE_STATE_ACTIVE = 1
+DEVICE_STATE_DISABLED = 2
+DEVICE_STATE_NOTPRESENT = 4
+DEVICE_STATE_UNPLUGGED = 8
+DEVICE_STATEMASK_ALL = 0xF
 AUDCLNT_SHAREMODE_SHARED = 0
 AUDCLNT_STREAMFLAGS_LOOPBACK = 0x00020000
 AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM = 0x80000000
@@ -226,8 +231,8 @@ def render_device_roles() -> tuple[int, int]:
     return (E_CONSOLE, E_COMMUNICATIONS)
 
 
-def list_wasapi_endpoints(flow: int) -> list:
-    """Active capture (1) or render (0) endpoints as AudioEndpoint-like tuples via COM."""
+def list_wasapi_endpoints(flow: int, state_mask: int = DEVICE_STATEMASK_ALL) -> list:
+    """Capture (1) or render (0) endpoints. Includes unplugged/disabled hardware."""
     from personalclipboard.audio.devices import AudioEndpoint
 
     if sys.platform != "win32":
@@ -249,7 +254,7 @@ def list_wasapi_endpoints(flow: int) -> list:
         enum_ep = _fn(
             enumerator, 3, ctypes.HRESULT, wintypes.DWORD, wintypes.DWORD, POINTER(c_void_p)
         )
-        if enum_ep(enumerator, int(flow), DEVICE_STATE_ACTIVE, byref(collection)) != 0 or not collection:
+        if enum_ep(enumerator, int(flow), int(state_mask), byref(collection)) != 0 or not collection:
             return []
         count = c_uint32(0)
         get_count = _fn(collection, 3, ctypes.HRESULT, POINTER(c_uint32))
@@ -261,12 +266,18 @@ def list_wasapi_endpoints(flow: int) -> list:
             if item(collection, index, byref(device)) != 0 or not device:
                 continue
             try:
+                state = _device_state(device)
+                if state == DEVICE_STATE_NOTPRESENT:
+                    continue
                 ident = _device_id(device)
                 name = _device_name(device) or ident
                 if ident:
-                    found.append(AudioEndpoint(ident, name))
+                    found.append(
+                        AudioEndpoint(ident, name, active=state == DEVICE_STATE_ACTIVE)
+                    )
             finally:
                 _release(device)
+        found.sort(key=lambda item: (not item.active, item.name.casefold(), item.device_id))
         return found
     except Exception:
         return []
@@ -280,7 +291,42 @@ def list_wasapi_endpoints(flow: int) -> list:
             pass
 
 
-DEVICE_STATE_ACTIVE = 1
+def default_wasapi_name(flow: int) -> str:
+    """Friendly name of the Windows default capture (1) or render (0) endpoint."""
+    if sys.platform != "win32":
+        return ""
+    ole = _ole32()
+    init_hr = _hr(ole.CoInitializeEx(None, COINIT_MULTITHREADED))
+    if init_hr not in (0, 1, RPC_E_CHANGED_MODE):
+        return ""
+    owned_com = init_hr == 0
+    enumerator = c_void_p()
+    device = c_void_p()
+    try:
+        hr = ole.CoCreateInstance(
+            byref(_CLSID_ENUM), None, CLSCTX_ALL, byref(_IID_ENUM), byref(enumerator)
+        )
+        if hr != 0 or not enumerator:
+            return ""
+        get_default = _fn(
+            enumerator, 4, ctypes.HRESULT, wintypes.DWORD, wintypes.DWORD, POINTER(c_void_p)
+        )
+        roles = render_device_roles() if int(flow) == E_RENDER else (E_CONSOLE, E_COMMUNICATIONS)
+        for role in roles:
+            device = c_void_p()
+            if get_default(enumerator, int(flow), role, byref(device)) == 0 and device:
+                return _device_name(device) or ""
+        return ""
+    except Exception:
+        return ""
+    finally:
+        _release(device)
+        _release(enumerator)
+        try:
+            if owned_com:
+                ole.CoUninitialize()
+        except Exception:
+            pass
 
 
 def _open_render(enumerator: c_void_p, device_id: str) -> c_void_p:
@@ -297,6 +343,14 @@ def _get_device(enumerator: c_void_p, device_id: str) -> c_void_p | None:
     if get_device(enumerator, device_id, byref(device)) == 0 and device:
         return device
     return None
+
+
+def _device_state(device: c_void_p) -> int:
+    get_state = _fn(device, 6, ctypes.HRESULT, POINTER(c_uint32))
+    state = c_uint32(0)
+    if get_state(device, byref(state)) != 0:
+        return DEVICE_STATE_ACTIVE
+    return int(state.value)
 
 
 def _device_id(device: c_void_p) -> str:

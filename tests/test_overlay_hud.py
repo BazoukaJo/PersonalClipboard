@@ -90,11 +90,23 @@ def test_settings_panel_emits_input_output(qapp) -> None:
         ollama_models=[],
         vad=True,
         predict=True,
-        input_devices=[("{mic}", "Microphone (Maono AU-PM401)")],
-        output_devices=[("{spk}", "Headphones (JBL)")],
+        input_devices=[
+            ("{mic}", "Microphone (Maono AU-PM401)"),
+            ("{cam}", "Microphone (2- Logitech Webcam C930e)"),
+        ],
+        output_devices=[
+            ("{spk}", "Headphones (JBL)"),
+            ("{tv}", "LG TV SSCR2 (NVIDIA High Definition Audio)"),
+        ],
         input_device_id="",
         output_device_id="",
+        default_input_name="Microphone (Maono AU-PM401)",
+        default_output_name="Headphones (JBL Tune Buds 2)",
     )
+    assert panel._input.itemText(0) == "Windows default (Microphone (Maono AU-PM401))"
+    assert panel._output.itemText(0) == "Windows default (Headphones (JBL Tune Buds 2))"
+    assert panel._input.count() == 3
+    assert panel._output.count() == 3
     panel._input.setCurrentIndex(panel._input.findData("{mic}"))
     panel._output.setCurrentIndex(panel._output.findData("{spk}"))
     assert inputs == [("{mic}", "Microphone (Maono AU-PM401)")]
@@ -107,14 +119,25 @@ def test_settings_panel_emits_input_output(qapp) -> None:
         ollama_models=[],
         vad=True,
         predict=True,
-        input_devices=[("{mic}", "Microphone (Maono AU-PM401)")],
-        output_devices=[("{spk}", "Headphones (JBL)")],
+        input_devices=[
+            ("{mic}", "Microphone (Maono AU-PM401)"),
+            ("{cam}", "Microphone (2- Logitech Webcam C930e)"),
+        ],
+        output_devices=[
+            ("{spk}", "Headphones (JBL)"),
+            ("{tv}", "LG TV SSCR2 (NVIDIA High Definition Audio)"),
+        ],
         input_device_id="{mic}",
         input_device_name="Microphone (Maono AU-PM401)",
         output_device_id="{spk}",
         output_device_name="Headphones (JBL)",
+        default_input_name="Microphone (Maono AU-PM401)",
+        default_output_name="Headphones (JBL Tune Buds 2)",
     )
-    assert inputs == [("{mic}", "Microphone (Maono AU-PM401)")]
+    assert panel._input.itemText(0) == "Windows default (Microphone (Maono AU-PM401))"
+    assert panel._output.itemText(0) == "Windows default (Headphones (JBL Tune Buds 2))"
+    assert panel._input.count() == 3
+    assert panel._output.count() == 3
     panel.deleteLater()
 
 

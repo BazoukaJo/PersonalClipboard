@@ -874,12 +874,15 @@ class PersonalClipboardApp(QObject):
         self._booting = True
         try:
             from personalclipboard.audio.devices import (
+                default_capture_name,
+                default_render_name,
+                labeled_endpoints,
                 list_capture_endpoints,
                 list_render_endpoints,
             )
 
-            inputs = [(item.device_id, item.name) for item in list_capture_endpoints()]
-            outputs = [(item.device_id, item.name) for item in list_render_endpoints()]
+            inputs = labeled_endpoints(list_capture_endpoints())
+            outputs = labeled_endpoints(list_render_endpoints())
             self._overlay.settings.set_values(
                 language=self._settings.ui_language,
                 opacity=self._settings.overlay_opacity,
@@ -894,6 +897,8 @@ class PersonalClipboardApp(QObject):
                 input_device_name=self._settings.input_device_name,
                 output_device_id=self._settings.output_device_id,
                 output_device_name=self._settings.output_device_name,
+                default_input_name=default_capture_name(),
+                default_output_name=default_render_name(),
             )
         finally:
             self._booting = was_booting

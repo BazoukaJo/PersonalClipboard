@@ -86,6 +86,10 @@ def test_overlay_geometry_roundtrip(tmp_path: Path) -> None:
     settings.overlay_y = 40
     settings.overlay_w = 640
     settings.overlay_h = 360
+    settings.input_device_id = "{0.0.1.00000000}.{abc}"
+    settings.input_device_name = "Microphone (Maono AU-PM401)"
+    settings.output_device_id = "{0.0.0.00000000}.{def}"
+    settings.output_device_name = "Headphones (JBL)"
     settings.enable_capture = True
     save_settings(settings, path)
     raw = path.read_text(encoding="utf-8")
@@ -102,6 +106,10 @@ def test_overlay_geometry_roundtrip(tmp_path: Path) -> None:
     assert loaded.overlay_y == 40
     assert loaded.overlay_w == 640
     assert loaded.overlay_h == 360
+    assert loaded.input_device_id == "{0.0.1.00000000}.{abc}"
+    assert loaded.input_device_name == "Microphone (Maono AU-PM401)"
+    assert loaded.output_device_id == "{0.0.0.00000000}.{def}"
+    assert loaded.output_device_name == "Headphones (JBL)"
     assert loaded.enable_capture is False
     assert saved_overlay_rect(loaded) == (-80, 40, 640, 360)
 

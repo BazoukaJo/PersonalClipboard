@@ -183,6 +183,9 @@ class PersonalClipboardApp(QObject):
         panel.ollama_changed.connect(self._on_ollama_changed)
         panel.vad_changed.connect(self._on_vad_changed)
         panel.predict_changed.connect(self._on_predict_changed)
+        panel.input_changed.connect(self._on_input_changed)
+        panel.output_changed.connect(self._on_output_changed)
+        self._overlay.settings_opening.connect(self._refresh_audio_devices)
         self._overlay.geometry_changed.connect(self._schedule_persist)
 
     def _emit_corrected(self, _jid: int, text: str) -> None:
@@ -796,6 +799,60 @@ class PersonalClipboardApp(QObject):
         self._persist_settings()
         self._overlay.set_predict_enabled(enabled)
 
+    def _on_input_changed(self, device_id: str, name: str) -> None:
+        if self._booting:
+            return
+        if (
+            device_id == self._settings.input_device_id
+            and name == self._settings.input_device_name
+        ):
+            return
+        self._settings.input_device_id = device_id
+        self._settings.input_device_name = name
+        self._persist_settings()
+        self._restart_microphone()
+
+    def _on_output_changed(self, device_id: str, name: str) -> None:
+        if self._booting:
+            return
+        if (
+            device_id == self._settings.output_device_id
+            and name == self._settings.output_device_name
+        ):
+            return
+        self._settings.output_device_id = device_id
+        self._settings.output_device_name = name
+        self._persist_settings()
+        if self._meeting is None:
+            return
+        self._capture.stop_loopback()
+        if not self._capture.start_loopback():
+            self._overlay.set_message("Could not capture the selected speakers.")
+
+    def _restart_microphone(self) -> None:
+        if self._vad_sleeping:
+            self._probe.stop()
+            self._probe.start()
+            return
+        if not self._want_mic or not self._asr.ready:
+            return
+        self._capture.stop()
+        try:
+            self._capture.start()
+        except Exception as exc:
+            self._overlay.set_enable_checked(False)
+            self._overlay.set_status("error")
+            self._overlay.set_message(str(exc))
+            return
+        mic = self._capture.device_name or "microphone"
+        extra = " (sounddevice)" if self._capture.backend == "sounddevice" else ""
+        self._overlay.set_message(f"Listening on {mic}{extra}.")
+
+    def _refresh_audio_devices(self) -> None:
+        box = self._overlay.settings._ollama
+        names = [box.itemText(i) for i in range(box.count())]
+        self._fill_settings(names)
+
     def _on_prediction_requested(self, prefix: str) -> None:
         # Type field only. Voice partials never reach submit_complete.
         if not self._settings.predict_enabled or not self._overlay.type_field_active():
@@ -816,6 +873,13 @@ class PersonalClipboardApp(QObject):
         was_booting = self._booting
         self._booting = True
         try:
+            from personalclipboard.audio.devices import (
+                list_capture_endpoints,
+                list_render_endpoints,
+            )
+
+            inputs = [(item.device_id, item.name) for item in list_capture_endpoints()]
+            outputs = [(item.device_id, item.name) for item in list_render_endpoints()]
             self._overlay.settings.set_values(
                 language=self._settings.ui_language,
                 opacity=self._settings.overlay_opacity,
@@ -824,6 +888,12 @@ class PersonalClipboardApp(QObject):
                 ollama_models=names,
                 vad=self._settings.vad_enabled,
                 predict=self._settings.predict_enabled,
+                input_devices=inputs,
+                output_devices=outputs,
+                input_device_id=self._settings.input_device_id,
+                input_device_name=self._settings.input_device_name,
+                output_device_id=self._settings.output_device_id,
+                output_device_name=self._settings.output_device_name,
             )
         finally:
             self._booting = was_booting

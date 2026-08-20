@@ -119,16 +119,17 @@ No pyannote on the hot path.
 
 ## 9. Meeting notes
 
-Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. While recording, a WASAPI loopback stream copies the default playback mix (console/multimedia endpoint first, then communications) into a second ring. Meeting mixes that ring with the microphone window. Playback Record uses the loopback ring only (YouTube and other app audio; no microphone). Overlay **Records** lists desktop `Meeting *.md` and `Playback *.md` files; opening a row shows the full note. Commits are stitched overlapping windows, then localhost-corrected, then appended. Audio is not written to disk. The overlay Copy control is disabled while recording. Dictation stays microphone-only; loopback stops when Record stops. Mic OFF stops a meeting; playback can continue with the microphone off.
+Meeting Record uses the same ASR worker with VoiceGate lock off and voice commands off. While recording, a WASAPI loopback stream copies the playback mix from the Settings output device (or the Windows default console/multimedia endpoint, then communications) into a second ring. Meeting mixes that ring with the microphone window (Settings input, or ranked default). Playback Record uses the loopback ring only (YouTube and other app audio; no microphone). Overlay **Records** lists desktop `Meeting *.md` and `Playback *.md` files; opening a row shows the full note. Commits are stitched overlapping windows, then localhost-corrected, then appended. Audio is not written to disk. The overlay Copy control is disabled while recording. Dictation stays microphone-only; loopback stops when Record stops. Mic OFF stops a meeting; playback can continue with the microphone off.
 
 ## 10. Module map
 
 | Module | Responsibility |
 |---|---|
 | `app.py` | `QApplication`, tray, start/stop workers |
-| `config.py` | Models, hop, hotkey, Ollama host, HUD language/opacity/VAD/predict/geometry (LOCALAPPDATA) |
+| `config.py` | Models, hop, hotkey, Ollama host, HUD language/opacity/VAD/predict/geometry/audio devices (LOCALAPPDATA) |
 | `audio/capture.py` | PyAudio WASAPI → ring; `sounddevice` fallback; meeting loopback ring |
-| `audio/loopback.py` | WASAPI render-mix capture (headphones/speakers), meeting only |
+| `audio/devices.py` | List WASAPI capture/render endpoints for Settings |
+| `audio/loopback.py` | WASAPI render-mix capture (chosen speakers/headphones) |
 | `audio/mix.py` | Mix mic + loopback windows on the ASR thread |
 | `audio/probe.py` | Short peeks to wake capture after VAD idle |
 | `asr/engine.py` | CUDA Faster-Whisper worker |

@@ -76,6 +76,48 @@ def test_settings_panel_emits_language_opacity_vad(qapp) -> None:
     panel.deleteLater()
 
 
+def test_settings_panel_emits_input_output(qapp) -> None:
+    panel = SettingsPanel()
+    inputs: list[tuple[str, str]] = []
+    outputs: list[tuple[str, str]] = []
+    panel.input_changed.connect(lambda ident, name: inputs.append((ident, name)))
+    panel.output_changed.connect(lambda ident, name: outputs.append((ident, name)))
+    panel.set_values(
+        language="en",
+        opacity=80,
+        whisper="large-v3-turbo",
+        ollama="qwen2.5:1.5b",
+        ollama_models=[],
+        vad=True,
+        predict=True,
+        input_devices=[("{mic}", "Microphone (Maono AU-PM401)")],
+        output_devices=[("{spk}", "Headphones (JBL)")],
+        input_device_id="",
+        output_device_id="",
+    )
+    panel._input.setCurrentIndex(panel._input.findData("{mic}"))
+    panel._output.setCurrentIndex(panel._output.findData("{spk}"))
+    assert inputs == [("{mic}", "Microphone (Maono AU-PM401)")]
+    assert outputs == [("{spk}", "Headphones (JBL)")]
+    panel.set_values(
+        language="en",
+        opacity=80,
+        whisper="large-v3-turbo",
+        ollama="qwen2.5:1.5b",
+        ollama_models=[],
+        vad=True,
+        predict=True,
+        input_devices=[("{mic}", "Microphone (Maono AU-PM401)")],
+        output_devices=[("{spk}", "Headphones (JBL)")],
+        input_device_id="{mic}",
+        input_device_name="Microphone (Maono AU-PM401)",
+        output_device_id="{spk}",
+        output_device_name="Headphones (JBL)",
+    )
+    assert inputs == [("{mic}", "Microphone (Maono AU-PM401)")]
+    panel.deleteLater()
+
+
 def test_opening_settings_does_not_grow_overlay(qapp) -> None:
     assert qapp is not None
     overlay = Overlay()

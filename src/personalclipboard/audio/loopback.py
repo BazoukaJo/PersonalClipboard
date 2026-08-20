@@ -129,12 +129,12 @@ class PcmSink(Protocol):
 
 
 class LoopbackCapture:
-    """Copies the default render mix into a ring. Start only while Meeting Record is on."""
+    """Copies a render mix into a ring. Start only while Meeting/Playback Record is on."""
 
-    def __init__(self, ring: PcmSink, sample_rate: int) -> None:
-        self.ring = ring
+    def __init__(self, ring: PcmSink, sample_rate: int, device_id: str = "") -> None:
         self.ring = ring
         self.sample_rate = sample_rate
+        self.device_id = device_id.strip()
         self.device_name = ""
         self._stop = threading.Event()
         self._ready = threading.Event()
@@ -189,7 +189,7 @@ class LoopbackCapture:
             )
             if hr != 0 or not enumerator:
                 raise OSError("Could not open the audio enumerator.")
-            device = _default_render(enumerator)
+            device = _open_render(enumerator, self.device_id)
             self.device_name = _device_name(device) or "speakers"
             client = _activate_client(device)
             _initialize_loopback(client, self.sample_rate)
@@ -224,6 +224,93 @@ class LoopbackCapture:
 def render_device_roles() -> tuple[int, int]:
     """YouTube and other apps play on eConsole; VoIP is eCommunications."""
     return (E_CONSOLE, E_COMMUNICATIONS)
+
+
+def list_wasapi_endpoints(flow: int) -> list:
+    """Active capture (1) or render (0) endpoints as AudioEndpoint-like tuples via COM."""
+    from personalclipboard.audio.devices import AudioEndpoint
+
+    if sys.platform != "win32":
+        return []
+    ole = _ole32()
+    init_hr = _hr(ole.CoInitializeEx(None, COINIT_MULTITHREADED))
+    if init_hr not in (0, 1, RPC_E_CHANGED_MODE):
+        return []
+    owned_com = init_hr == 0
+    enumerator = c_void_p()
+    collection = c_void_p()
+    found: list[AudioEndpoint] = []
+    try:
+        hr = ole.CoCreateInstance(
+            byref(_CLSID_ENUM), None, CLSCTX_ALL, byref(_IID_ENUM), byref(enumerator)
+        )
+        if hr != 0 or not enumerator:
+            return []
+        enum_ep = _fn(
+            enumerator, 3, ctypes.HRESULT, wintypes.DWORD, wintypes.DWORD, POINTER(c_void_p)
+        )
+        if enum_ep(enumerator, int(flow), DEVICE_STATE_ACTIVE, byref(collection)) != 0 or not collection:
+            return []
+        count = c_uint32(0)
+        get_count = _fn(collection, 3, ctypes.HRESULT, POINTER(c_uint32))
+        if get_count(collection, byref(count)) != 0:
+            return []
+        item = _fn(collection, 4, ctypes.HRESULT, c_uint32, POINTER(c_void_p))
+        for index in range(int(count.value)):
+            device = c_void_p()
+            if item(collection, index, byref(device)) != 0 or not device:
+                continue
+            try:
+                ident = _device_id(device)
+                name = _device_name(device) or ident
+                if ident:
+                    found.append(AudioEndpoint(ident, name))
+            finally:
+                _release(device)
+        return found
+    except Exception:
+        return []
+    finally:
+        _release(collection)
+        _release(enumerator)
+        try:
+            if owned_com:
+                ole.CoUninitialize()
+        except Exception:
+            pass
+
+
+DEVICE_STATE_ACTIVE = 1
+
+
+def _open_render(enumerator: c_void_p, device_id: str) -> c_void_p:
+    if device_id:
+        device = _get_device(enumerator, device_id)
+        if device:
+            return device
+    return _default_render(enumerator)
+
+
+def _get_device(enumerator: c_void_p, device_id: str) -> c_void_p | None:
+    get_device = _fn(enumerator, 5, ctypes.HRESULT, wintypes.LPCWSTR, POINTER(c_void_p))
+    device = c_void_p()
+    if get_device(enumerator, device_id, byref(device)) == 0 and device:
+        return device
+    return None
+
+
+def _device_id(device: c_void_p) -> str:
+    get_id = _fn(device, 5, ctypes.HRESULT, POINTER(c_void_p))
+    ptr = c_void_p()
+    if get_id(device, byref(ptr)) != 0 or not ptr.value:
+        return ""
+    try:
+        return ctypes.wstring_at(ptr.value)
+    finally:
+        try:
+            _ole32().CoTaskMemFree(ptr)
+        except Exception:
+            pass
 
 
 def _default_render(enumerator: c_void_p) -> c_void_p:

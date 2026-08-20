@@ -8,7 +8,10 @@ def test_maono_outranks_webcam() -> None:
     assert maono > webcam
 
 
-def test_maono_wasapi_outranks_mapper() -> None:
+def test_saved_mic_name_outranks_maono() -> None:
+    chosen = _score_device("Microphone (USB Conference)", "Windows WASAPI", "Microphone (USB Conference)")
+    maono = _score_device("Microphone (Maono AU-PM401)", "Windows WASAPI", "Microphone (USB Conference)")
+    assert chosen > maono
     wasapi = _score_device("Microphone (Maono AU-PM401)", "Windows WASAPI", "maono")
     mapper = _score_device("Microsoft Sound Mapper - Input", "MME", "maono")
     assert wasapi > mapper
@@ -81,7 +84,7 @@ def test_start_loopback_uses_render_capture(monkeypatch) -> None:
     fake = _FakeLoopback()
     monkeypatch.setattr(
         "personalclipboard.audio.loopback.LoopbackCapture",
-        lambda _ring, _rate: fake,
+        lambda *_args, **_kwargs: fake,
     )
     assert cap.start_loopback() is True
     assert cap.loopback_active is True
@@ -94,6 +97,20 @@ def test_start_loopback_uses_render_capture(monkeypatch) -> None:
     assert cap.loopback_active is False
 
 
+def test_start_loopback_passes_saved_output_id(monkeypatch) -> None:
+    seen: list[str] = []
+
+    class Capture(_FakeLoopback):
+        def __init__(self, _ring, _rate, device_id: str = "") -> None:
+            super().__init__()
+            seen.append(device_id)
+
+    cap = AudioCapture(Settings(output_device_id="{speakers}"))
+    monkeypatch.setattr("personalclipboard.audio.loopback.LoopbackCapture", Capture)
+    assert cap.start_loopback() is True
+    assert seen == ["{speakers}"]
+
+
 def test_start_loopback_fail_open(monkeypatch) -> None:
     cap = AudioCapture(Settings())
 
@@ -103,7 +120,7 @@ def test_start_loopback_fail_open(monkeypatch) -> None:
 
     monkeypatch.setattr(
         "personalclipboard.audio.loopback.LoopbackCapture",
-        lambda _ring, _rate: Boom(),
+        lambda *_args, **_kwargs: Boom(),
     )
     assert cap.start_loopback() is False
     assert cap.loopback_active is False

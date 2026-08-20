@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pyaudio
 
+from personalclipboard.audio.devices import names_match
 from personalclipboard.config import Settings
 
 
@@ -101,7 +102,11 @@ class AudioCapture:
             return True
         from personalclipboard.audio.loopback import LoopbackCapture
 
-        capture = LoopbackCapture(self.loop_ring, self._settings.sample_rate)
+        capture = LoopbackCapture(
+            self.loop_ring,
+            self._settings.sample_rate,
+            device_id=self._settings.output_device_id,
+        )
         try:
             self.loop_ring.clear()
             capture.start()
@@ -178,7 +183,7 @@ class AudioCapture:
         frame_samples = max(int(self._settings.sample_rate * self._settings.frame_ms / 1000), 1)
         if self._pa is None:
             self._pa = pyaudio.PyAudio()
-        candidates = _ranked_input_devices(self._pa, self._settings.preferred_input)
+        candidates = _ranked_input_devices(self._pa, self._input_needle())
         last_error: Exception | None = None
         self._stream = None
         for index, label in candidates:
@@ -211,7 +216,7 @@ class AudioCapture:
 
         frame_samples = max(int(self._settings.sample_rate * self._settings.frame_ms / 1000), 1)
         last_error: Exception | None = None
-        for index, label in _ranked_sd_devices(self._settings.preferred_input):
+        for index, label in _ranked_sd_devices(self._input_needle()):
             try:
                 stream = sd.InputStream(
                     samplerate=self._settings.sample_rate,
@@ -246,6 +251,12 @@ class AudioCapture:
         mono = indata[:, 0] if getattr(indata, "ndim", 1) > 1 else indata
         pcm = np.clip(np.asarray(mono) * 32767.0, -32768, 32767).astype(np.int16).tobytes()
         self.ring.write(pcm)
+
+    def _input_needle(self) -> str:
+        named = self._settings.input_device_name.strip()
+        if named:
+            return named
+        return self._settings.preferred_input
 
 
 def _ranked_input_devices(pa: pyaudio.PyAudio, preferred: str) -> list[tuple[int, str]]:
@@ -292,8 +303,10 @@ def _score_device(name: str, host_api: str, preferred: str) -> int:
     lower = name.lower()
     api = host_api.lower()
     score = 0
-    needle = preferred.strip().lower()
-    if needle and needle in lower:
+    needle = preferred.strip()
+    if needle and names_match(name, needle):
+        score += 200
+    elif needle and needle.lower() in lower:
         score += 100
     if "maono" in lower:
         score += 40

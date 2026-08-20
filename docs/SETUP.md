@@ -61,7 +61,7 @@ pythonw -m personalclipboard
 
 Use `python -m personalclipboard` for a console. After Whisper loads, Mic turns on. Uncheck Mic to idle capture and CUDA ASR. Ctrl+Shift+A still reformats the clipboard. A second launch replaces the running instance.
 
-Preferred WASAPI input: a device whose name contains `maono` when present (`config.py` `preferred_input`).
+Preferred capture and loopback devices are chosen in HUD Settings (Input / Output) and stored in LOCALAPPDATA `settings.json`. If a saved device is missing, the app falls back to Windows default (Maono-named mics still rank first when Input is default).
 
 A desktop shortcut is a local Windows `.lnk` only. Do not add it to the repo. After `.\scripts\build_exe.ps1`, point it at `dist\PersonalClipboard\PersonalClipboard.exe` with working directory that folder (`python scripts\write_shortcut.py`). Until the exe exists, `pythonw -m personalclipboard` is still valid.
 

@@ -42,7 +42,11 @@ class WakeProbe:
     def _loop(self) -> None:
         while not self._stop.is_set():
             try:
-                rms = _peek_rms(self._settings.sample_rate, 0.08)
+                rms = _peek_rms(
+                    self._settings.sample_rate,
+                    0.08,
+                    self._settings.input_device_name,
+                )
             except Exception:
                 if self._stop.wait(0.35):
                     return
@@ -54,38 +58,57 @@ class WakeProbe:
                 return
 
 
-def _peek_rms(sample_rate: int, seconds: float) -> float:
+def _peek_rms(sample_rate: int, seconds: float, preferred: str = "") -> float:
     frames = max(int(sample_rate * seconds), 256)
     try:
-        return _peek_sounddevice(sample_rate, frames)
+        return _peek_sounddevice(sample_rate, frames, preferred)
     except Exception:
-        return _peek_pyaudio(sample_rate, frames)
+        return _peek_pyaudio(sample_rate, frames, preferred)
 
 
-def _peek_sounddevice(sample_rate: int, frames: int) -> float:
-    audio = sd.rec(
-        frames,
-        samplerate=sample_rate,
-        channels=1,
-        dtype="float32",
-        blocking=True,
-    )
+def _peek_sounddevice(sample_rate: int, frames: int, preferred: str = "") -> float:
+    kwargs: dict = {
+        "samplerate": sample_rate,
+        "channels": 1,
+        "dtype": "float32",
+        "blocking": True,
+    }
+    index = _sd_input_index(preferred)
+    if index is not None:
+        kwargs["device"] = index
+    audio = sd.rec(frames, **kwargs)
     if audio is None or audio.size == 0:
         return 0.0
     return float(np.sqrt(np.mean(np.square(audio.astype(np.float64)))))
 
 
-def _peek_pyaudio(sample_rate: int, frames: int) -> float:
+def _sd_input_index(preferred: str) -> int | None:
+    if not preferred.strip():
+        return None
+    from personalclipboard.audio.capture import _ranked_sd_devices
+
+    for index, label in _ranked_sd_devices(preferred):
+        return index
+    return None
+
+
+def _peek_pyaudio(sample_rate: int, frames: int, preferred: str = "") -> float:
     pa = pyaudio.PyAudio()
     stream = None
     try:
-        stream = pa.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=sample_rate,
-            input=True,
-            frames_per_buffer=frames,
-        )
+        kwargs: dict = {
+            "format": pyaudio.paInt16,
+            "channels": 1,
+            "rate": sample_rate,
+            "input": True,
+            "frames_per_buffer": frames,
+        }
+        from personalclipboard.audio.capture import _ranked_input_devices
+
+        ranked = _ranked_input_devices(pa, preferred)
+        if ranked:
+            kwargs["input_device_index"] = ranked[0][0]
+        stream = pa.open(**kwargs)
         raw = stream.read(frames, exception_on_overflow=False)
         samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
         if samples.size == 0:

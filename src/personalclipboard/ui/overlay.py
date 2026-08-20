@@ -105,6 +105,7 @@ class Overlay(QWidget):
     translate_requested = pyqtSignal(str)
     correction_mode_changed = pyqtSignal(str)
     geometry_changed = pyqtSignal()
+    settings_opening = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -592,6 +593,7 @@ class Overlay(QWidget):
         self.enable_toggled.emit(checked)
 
     def _open_settings(self) -> None:
+        self.settings_opening.emit()
         self.settings.retranslate(self._lang)
         self.settings.exec()
 

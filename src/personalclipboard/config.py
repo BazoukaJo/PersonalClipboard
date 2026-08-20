@@ -45,6 +45,10 @@ _PERSIST = (
     "overlay_y",
     "overlay_w",
     "overlay_h",
+    "input_device_id",
+    "input_device_name",
+    "output_device_id",
+    "output_device_name",
 )
 
 
@@ -88,6 +92,10 @@ class Settings:
     overlay_y: int = 0
     overlay_w: int = 0
     overlay_h: int = 0
+    input_device_id: str = ""
+    input_device_name: str = ""
+    output_device_id: str = ""
+    output_device_name: str = ""
 
 
 def default_settings() -> Settings:
@@ -128,6 +136,10 @@ def load_settings(path: Path | None = None) -> Settings:
     settings.overlay_y = _clamp_int(settings.overlay_y, -100_000, 100_000, 0)
     settings.overlay_w = _clamp_int(settings.overlay_w, 0, 10_000, 0)
     settings.overlay_h = _clamp_int(settings.overlay_h, 0, 10_000, 0)
+    settings.input_device_id = _clean_device(settings.input_device_id)
+    settings.input_device_name = _clean_device(settings.input_device_name)
+    settings.output_device_id = _clean_device(settings.output_device_id)
+    settings.output_device_name = _clean_device(settings.output_device_name)
     return settings
 
 
@@ -138,6 +150,12 @@ def saved_overlay_rect(settings: Settings) -> tuple[int, int, int, int] | None:
     if width < OVERLAY_MIN_W or height < OVERLAY_MIN_H:
         return None
     return (settings.overlay_x, settings.overlay_y, width, height)
+
+
+def _clean_device(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()[:512]
 
 
 def _clamp_int(value: object, low: int, high: int, default: int) -> int:

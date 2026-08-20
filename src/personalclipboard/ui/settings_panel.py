@@ -1,4 +1,4 @@
-"""Modal settings: language, opacity, models, VAD, type-ahead."""
+"""Modal settings: language, audio devices, opacity, models, VAD, type-ahead."""
 
 from __future__ import annotations
 
@@ -41,6 +41,8 @@ class SettingsPanel(QDialog):
     ollama_changed = pyqtSignal(str)
     vad_changed = pyqtSignal(bool)
     predict_changed = pyqtSignal(bool)
+    input_changed = pyqtSignal(str, str)
+    output_changed = pyqtSignal(str, str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -48,8 +50,8 @@ class SettingsPanel(QDialog):
         self.setModal(True)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
-        self.setMinimumSize(460, 420)
-        self.resize(520, 480)
+        self.setMinimumSize(460, 500)
+        self.resize(520, 560)
         self.setStyleSheet(
             "QDialog { background: #1a1a1c; color: #f0f0f2; }" + control_chrome()
         )
@@ -62,6 +64,8 @@ class SettingsPanel(QDialog):
         body_layout.setContentsMargins(4, 8, 4, 8)
         body_layout.setSpacing(12)
         body_layout.addWidget(_field_row(self._lang_label, self._lang_box))
+        body_layout.addWidget(_field_row(self._input_label, self._input))
+        body_layout.addWidget(_field_row(self._output_label, self._output))
         body_layout.addWidget(
             _slider_row(self._opacity_label, self._opacity, self._opacity_value)
         )
@@ -105,6 +109,14 @@ class SettingsPanel(QDialog):
         for code, name in LANGS:
             self._lang_box.addItem(name, code)
         self._lang_box.currentIndexChanged.connect(self._emit_language)
+        self._input_label = QLabel()
+        self._input_label.setObjectName("fieldLabel")
+        self._input = QComboBox()
+        self._input.currentIndexChanged.connect(self._emit_input)
+        self._output_label = QLabel()
+        self._output_label.setObjectName("fieldLabel")
+        self._output = QComboBox()
+        self._output.currentIndexChanged.connect(self._emit_output)
         self._opacity_label = QLabel()
         self._opacity_label.setObjectName("fieldLabel")
         self._opacity = QSlider(Qt.Orientation.Horizontal)
@@ -139,7 +151,7 @@ class SettingsPanel(QDialog):
 
     def _style_fields(self) -> None:
         font = QFont("Segoe UI", 11)
-        for box in (self._lang_box, self._whisper, self._ollama):
+        for box in (self._lang_box, self._input, self._output, self._whisper, self._ollama):
             box.setObjectName("settingField")
             box.setFont(font)
             box.setFixedHeight(_CONTROL_H)
@@ -162,6 +174,12 @@ class SettingsPanel(QDialog):
         self._lang_label.setText(t(lang, "language"))
         self._lang_label.setToolTip(t(lang, "language_tip"))
         self._lang_box.setToolTip(t(lang, "language_tip"))
+        self._input_label.setText(t(lang, "input"))
+        self._input_label.setToolTip(t(lang, "input_tip"))
+        self._input.setToolTip(t(lang, "input_tip"))
+        self._output_label.setText(t(lang, "output"))
+        self._output_label.setToolTip(t(lang, "output_tip"))
+        self._output.setToolTip(t(lang, "output_tip"))
         self._opacity_label.setText(t(lang, "opacity"))
         self._opacity.setToolTip(t(lang, "opacity_tip"))
         self._whisper_label.setText(t(lang, "whisper"))
@@ -172,6 +190,10 @@ class SettingsPanel(QDialog):
         self._vad.setToolTip(t(lang, "vad_tip"))
         self._predict.setText(t(lang, "predict"))
         self._predict.setToolTip(t(lang, "predict_tip"))
+        if self._input.count() > 0:
+            self._input.setItemText(0, t(lang, "device_default"))
+        if self._output.count() > 0:
+            self._output.setItemText(0, t(lang, "device_default"))
 
     def set_values(
         self,
@@ -183,6 +205,12 @@ class SettingsPanel(QDialog):
         ollama_models: list[str],
         vad: bool,
         predict: bool,
+        input_devices: list[tuple[str, str]] | None = None,
+        output_devices: list[tuple[str, str]] | None = None,
+        input_device_id: str = "",
+        input_device_name: str = "",
+        output_device_id: str = "",
+        output_device_name: str = "",
     ) -> None:
         self._updating = True
         index = self._lang_box.findData(language)
@@ -192,6 +220,12 @@ class SettingsPanel(QDialog):
         self._fill_combo(self._whisper, list(WHISPER_CHOICES), whisper)
         models = list(dict.fromkeys(list(OLLAMA_CHOICES) + ollama_models + [ollama]))
         self._fill_combo(self._ollama, models, ollama)
+        self._fill_endpoint(
+            self._input, input_devices or [], input_device_id, input_device_name
+        )
+        self._fill_endpoint(
+            self._output, output_devices or [], output_device_id, output_device_name
+        )
         self._vad.setChecked(vad)
         self._predict.setChecked(predict)
         self._updating = False
@@ -208,6 +242,29 @@ class SettingsPanel(QDialog):
         elif current:
             box.addItem(current)
             box.setCurrentText(current)
+        box.blockSignals(False)
+
+    def _fill_endpoint(
+        self,
+        box: QComboBox,
+        devices: list[tuple[str, str]],
+        current_id: str,
+        current_name: str,
+    ) -> None:
+        box.blockSignals(True)
+        box.clear()
+        box.addItem(t(self._lang, "device_default"), "")
+        seen = {""}
+        for device_id, name in devices:
+            ident = device_id.strip()
+            if not ident or ident in seen:
+                continue
+            seen.add(ident)
+            box.addItem(name.strip() or ident, ident)
+        if current_id and current_id not in seen:
+            box.addItem(current_name.strip() or current_id, current_id)
+        found = box.findData(current_id)
+        box.setCurrentIndex(found if found >= 0 else 0)
         box.blockSignals(False)
 
     def _emit_language(self) -> None:
@@ -239,6 +296,25 @@ class SettingsPanel(QDialog):
     def _emit_predict(self, checked: bool) -> None:
         if not self._updating:
             self.predict_changed.emit(checked)
+
+    def _emit_input(self) -> None:
+        if not self._updating:
+            ident, name = self._endpoint_choice(self._input)
+            self.input_changed.emit(ident, name)
+
+    def _emit_output(self) -> None:
+        if not self._updating:
+            ident, name = self._endpoint_choice(self._output)
+            self.output_changed.emit(ident, name)
+
+    def _endpoint_choice(self, box: QComboBox) -> tuple[str, str]:
+        ident = box.currentData()
+        if not isinstance(ident, str):
+            ident = ""
+        name = box.currentText().strip()
+        if not ident:
+            return "", ""
+        return ident, name
 
 
 def _field_row(label: QLabel, widget: QWidget) -> QWidget:

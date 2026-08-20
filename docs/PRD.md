@@ -66,7 +66,7 @@ Single local user on this PC.
 - FR-U2: Shows partial hypothesis, last commit, and status `listening | quiet | uncertain | locked | off`.
 - FR-U3: Enable switch is visible and reachable without focusing another app.
 - FR-U4: Only one process. A new launch (desktop shortcut to the exe, tray Restart, or `pythonw -m`) stops the previous instance, then starts fresh.
-- FR-U5: HUD Settings (modal): UI language (English, Français, Español), overlay opacity, Whisper model, Ollama model, VAD idle toggle, type-ahead toggle, overlay position and width. Height follows content. Persist under LOCALAPPDATA. Mic enable is not persisted.
+- FR-U5: HUD Settings (modal): UI language (English, Français, Español), microphone input, speaker/headphone output for records, overlay opacity, Whisper model, Ollama model, VAD idle toggle, type-ahead toggle, overlay position and width. Height follows content. Persist under LOCALAPPDATA (including chosen audio devices). Mic enable is not persisted.
 
 ### 4.5 Cacophony
 
